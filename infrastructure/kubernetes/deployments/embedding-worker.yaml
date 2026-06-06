@@ -1,0 +1,269 @@
+---
+# Embedding Worker Deployment
+# 2 replicas, GPU-tolerant: runs on CPU by default, uses GPU nodes if available
+# Handles: OpenAI API calls OR local embedding model inference on GPU
+
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: embedding-worker
+  namespace: rag-app
+  labels:
+    app.kubernetes.io/name: embedding-worker
+    app.kubernetes.io/component: worker
+    app.kubernetes.io/part-of: rag-assistant
+    app.kubernetes.io/version: "1.0.0"
+spec:
+  replicas: 2
+  revisionHistoryLimit: 5
+  selector:
+    matchLabels:
+      app: embedding-worker
+  strategy:
+    type: RollingUpdate
+    rollingUpdate:
+      maxSurge: 1
+      maxUnavailable: 1
+  template:
+    metadata:
+      labels:
+        app: embedding-worker
+        app.kubernetes.io/name: embedding-worker
+        app.kubernetes.io/component: worker
+        prometheus-scrape: "true"
+        version: "1.0.0"
+      annotations:
+        prometheus.io/scrape: "true"
+        prometheus.io/port: "9090"
+        prometheus.io/path: "/metrics"
+    spec:
+      serviceAccountName: embedding-worker-sa
+      automountServiceAccountToken: false
+      terminationGracePeriodSeconds: 120
+
+      securityContext:
+        runAsNonRoot: true
+        runAsUser: 1000
+        runAsGroup: 1000
+        fsGroup: 1000
+        seccompProfile:
+          type: RuntimeDefault
+
+      # GPU tolerations: schedule on GPU nodes if they exist
+      # Comment these out if using OpenAI API (no local GPU needed)
+      tolerations:
+        - key: "nvidia.com/gpu"
+          operator: "Exists"
+          effect: "NoSchedule"
+        - key: "gpu"
+          operator: "Equal"
+          value: "true"
+          effect: "NoSchedule"
+
+      affinity:
+        podAntiAffinity:
+          preferredDuringSchedulingIgnoredDuringExecution:
+            - weight: 100
+              podAffinityTerm:
+                labelSelector:
+                  matchExpressions:
+                    - key: app
+                      operator: In
+                      values:
+                        - embedding-worker
+                topologyKey: kubernetes.io/hostname
+
+        # Optional: prefer GPU nodes for local embedding models
+        # Comment out if using OpenAI API
+        nodeAffinity:
+          preferredDuringSchedulingIgnoredDuringExecution:
+            - weight: 50
+              preference:
+                matchExpressions:
+                  - key: node.kubernetes.io/instance-type
+                    operator: In
+                    values:
+                      - g4dn.xlarge    # AWS GPU instance types
+                      - g4dn.2xlarge
+                      - g5.xlarge
+                      - p3.2xlarge
+
+      containers:
+        - name: embedding-worker
+          image: your-registry/rag-embedding-worker:latest
+          imagePullPolicy: Always
+          ports:
+            - name: metrics
+              containerPort: 9090
+              protocol: TCP
+            - name: health
+              containerPort: 8003
+              protocol: TCP
+
+          resources:
+            requests:
+              cpu: "500m"
+              memory: "1Gi"
+            limits:
+              cpu: "2000m"
+              memory: "4Gi"
+              # Uncomment for local GPU model inference:
+              # nvidia.com/gpu: "1"
+
+          envFrom:
+            - configMapRef:
+                name: rag-app-config
+            - secretRef:
+                name: rag-app-secrets
+
+          env:
+            - name: OTEL_SERVICE_NAME
+              value: "embedding-worker"
+            - name: WORKER_TYPE
+              value: "embedding"
+            - name: WORKER_CONCURRENCY
+              value: "8"
+            - name: CUDA_VISIBLE_DEVICES
+              value: "0"    # Use first GPU if available; no-op on CPU nodes
+            - name: TOKENIZERS_PARALLELISM
+              value: "false"  # Prevent HuggingFace tokenizer fork warning
+            - name: POD_NAME
+              valueFrom:
+                fieldRef:
+                  fieldPath: metadata.name
+            - name: POD_NAMESPACE
+              valueFrom:
+                fieldRef:
+                  fieldPath: metadata.namespace
+            - name: NODE_NAME
+              valueFrom:
+                fieldRef:
+                  fieldPath: spec.nodeName
+
+          livenessProbe:
+            httpGet:
+              path: /health/live
+              port: health
+            initialDelaySeconds: 30
+            periodSeconds: 30
+            timeoutSeconds: 10
+            failureThreshold: 3
+
+          readinessProbe:
+            httpGet:
+              path: /health/ready
+              port: health
+            initialDelaySeconds: 20
+            periodSeconds: 15
+            timeoutSeconds: 5
+            failureThreshold: 3
+
+          startupProbe:
+            httpGet:
+              path: /health/live
+              port: health
+            initialDelaySeconds: 10
+            periodSeconds: 10
+            timeoutSeconds: 10
+            # 60 * 10s = 600s max startup (model download on first run)
+            failureThreshold: 60
+
+          securityContext:
+            allowPrivilegeEscalation: false
+            readOnlyRootFilesystem: true
+            capabilities:
+              drop:
+                - ALL
+
+          volumeMounts:
+            - name: tmp
+              mountPath: /tmp
+            - name: model-cache
+              mountPath: /root/.cache/huggingface    # cache downloaded models
+            - name: workspace
+              mountPath: /workspace
+
+      volumes:
+        - name: tmp
+          emptyDir: {}
+        - name: workspace
+          emptyDir: {}
+        - name: model-cache
+          # Use PVC for model persistence across pod restarts (avoids re-download)
+          # Switch to PVC in production to avoid downloading 1GB+ models on every restart
+          emptyDir:
+            sizeLimit: 10Gi
+          # Uncomment below and remove emptyDir to persist model cache:
+          # persistentVolumeClaim:
+          #   claimName: embedding-model-cache-pvc
+
+      imagePullSecrets:
+        - name: registry-credentials
+
+---
+# KEDA ScaledObject for embedding worker (based on embedding_generation queue)
+apiVersion: keda.sh/v1alpha1
+kind: ScaledObject
+metadata:
+  name: embedding-worker-scaler
+  namespace: rag-app
+spec:
+  scaleTargetRef:
+    name: embedding-worker
+  pollingInterval: 15
+  cooldownPeriod: 120       # longer cooldown: model load is expensive
+  minReplicaCount: 2
+  maxReplicaCount: 10       # fewer max than processing (GPU-constrained)
+  advanced:
+    horizontalPodAutoscalerConfig:
+      behavior:
+        scaleDown:
+          stabilizationWindowSeconds: 180
+          policies:
+            - type: Pods
+              value: 1
+              periodSeconds: 120
+        scaleUp:
+          stabilizationWindowSeconds: 60
+          policies:
+            - type: Pods
+              value: 2
+              periodSeconds: 60
+  triggers:
+    - type: rabbitmq
+      metadata:
+        protocol: amqp
+        queueName: embedding_generation
+        mode: QueueLength
+        value: "50"     # 1 worker per 50 queued embedding tasks
+        hostFromEnv: RABBITMQ_KEDA_URL
+      authenticationRef:
+        name: rabbitmq-trigger-auth
+
+---
+# PVC for model cache (optional, recommended for production)
+# Uncomment and use in volume spec above if you run local models
+# apiVersion: v1
+# kind: PersistentVolumeClaim
+# metadata:
+#   name: embedding-model-cache-pvc
+#   namespace: rag-app
+# spec:
+#   accessModes:
+#     - ReadWriteOnce
+#   storageClassName: gp3
+#   resources:
+#     requests:
+#       storage: 20Gi
+
+---
+apiVersion: policy/v1
+kind: PodDisruptionBudget
+metadata:
+  name: embedding-worker-pdb
+  namespace: rag-app
+spec:
+  minAvailable: 1
+  selector:
+    matchLabels:
+      app: embedding-worker

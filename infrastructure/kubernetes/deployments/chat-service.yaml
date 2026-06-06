@@ -1,0 +1,185 @@
+---
+# Chat Service Deployment
+# 5 replicas, higher resources for LLM inference calls, HPA managed externally
+
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: chat-service
+  namespace: rag-app
+  labels:
+    app.kubernetes.io/name: chat-service
+    app.kubernetes.io/component: chat
+    app.kubernetes.io/part-of: rag-assistant
+    app.kubernetes.io/version: "1.0.0"
+spec:
+  replicas: 5
+  revisionHistoryLimit: 5
+  selector:
+    matchLabels:
+      app: chat-service
+  strategy:
+    type: RollingUpdate
+    rollingUpdate:
+      maxSurge: 2
+      maxUnavailable: 0
+  template:
+    metadata:
+      labels:
+        app: chat-service
+        app.kubernetes.io/name: chat-service
+        app.kubernetes.io/component: chat
+        prometheus-scrape: "true"
+        version: "1.0.0"
+      annotations:
+        prometheus.io/scrape: "true"
+        prometheus.io/port: "9090"
+        prometheus.io/path: "/metrics"
+    spec:
+      serviceAccountName: chat-service-sa
+      automountServiceAccountToken: false
+      terminationGracePeriodSeconds: 120   # longer: in-flight LLM calls can take ~60s
+
+      securityContext:
+        runAsNonRoot: true
+        runAsUser: 1000
+        runAsGroup: 1000
+        fsGroup: 1000
+        seccompProfile:
+          type: RuntimeDefault
+
+      topologySpreadConstraints:
+        - maxSkew: 1
+          topologyKey: kubernetes.io/hostname
+          whenUnsatisfiable: DoNotSchedule
+          labelSelector:
+            matchLabels:
+              app: chat-service
+        - maxSkew: 2
+          topologyKey: topology.kubernetes.io/zone
+          whenUnsatisfiable: ScheduleAnyway
+          labelSelector:
+            matchLabels:
+              app: chat-service
+
+      affinity:
+        podAntiAffinity:
+          preferredDuringSchedulingIgnoredDuringExecution:
+            - weight: 100
+              podAffinityTerm:
+                labelSelector:
+                  matchExpressions:
+                    - key: app
+                      operator: In
+                      values:
+                        - chat-service
+                topologyKey: kubernetes.io/hostname
+
+      containers:
+        - name: chat-service
+          image: your-registry/rag-chat-service:latest
+          imagePullPolicy: Always
+          ports:
+            - name: http
+              containerPort: 8001
+              protocol: TCP
+            - name: metrics
+              containerPort: 9090
+              protocol: TCP
+
+          # Higher resources: LLM calls are CPU/memory intensive during streaming
+          resources:
+            requests:
+              cpu: "500m"
+              memory: "512Mi"
+            limits:
+              cpu: "1000m"
+              memory: "1Gi"
+
+          envFrom:
+            - configMapRef:
+                name: rag-app-config
+            - secretRef:
+                name: rag-app-secrets
+
+          env:
+            - name: OTEL_SERVICE_NAME
+              value: "chat-service"
+            - name: API_PORT
+              value: "8001"
+            - name: POD_NAME
+              valueFrom:
+                fieldRef:
+                  fieldPath: metadata.name
+            - name: POD_NAMESPACE
+              valueFrom:
+                fieldRef:
+                  fieldPath: metadata.namespace
+            - name: POD_IP
+              valueFrom:
+                fieldRef:
+                  fieldPath: status.podIP
+
+          livenessProbe:
+            httpGet:
+              path: /health/live
+              port: http
+            initialDelaySeconds: 20
+            periodSeconds: 30
+            timeoutSeconds: 10
+            failureThreshold: 3
+
+          readinessProbe:
+            httpGet:
+              path: /health/ready
+              port: http
+            initialDelaySeconds: 15
+            periodSeconds: 10
+            timeoutSeconds: 5
+            failureThreshold: 3
+
+          startupProbe:
+            httpGet:
+              path: /health/live
+              port: http
+            initialDelaySeconds: 10
+            periodSeconds: 5
+            timeoutSeconds: 5
+            failureThreshold: 30   # 30 * 5s = 150s max startup (model warm-up)
+
+          securityContext:
+            allowPrivilegeEscalation: false
+            readOnlyRootFilesystem: true
+            capabilities:
+              drop:
+                - ALL
+
+          volumeMounts:
+            - name: tmp
+              mountPath: /tmp
+
+          lifecycle:
+            preStop:
+              exec:
+                # Wait for in-flight streaming responses to complete
+                command: ["/bin/sh", "-c", "sleep 10"]
+
+      volumes:
+        - name: tmp
+          emptyDir: {}
+
+      imagePullSecrets:
+        - name: registry-credentials
+
+---
+# PodDisruptionBudget: keep at least 3 chat pods alive during disruptions
+apiVersion: policy/v1
+kind: PodDisruptionBudget
+metadata:
+  name: chat-service-pdb
+  namespace: rag-app
+spec:
+  minAvailable: 3
+  selector:
+    matchLabels:
+      app: chat-service

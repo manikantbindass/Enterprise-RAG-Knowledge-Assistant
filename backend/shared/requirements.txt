@@ -1,0 +1,55 @@
+# ============================================================
+# Enterprise RAG Knowledge Assistant — Shared Library
+# ============================================================
+
+# ---- Web Framework ----
+fastapi>=0.111.0
+uvicorn[standard]>=0.29.0
+python-multipart>=0.0.9
+httpx>=0.27.0
+
+# ---- Database (async SQLAlchemy + PostgreSQL) ----
+sqlalchemy[asyncio]>=2.0.30
+asyncpg>=0.29.0
+alembic>=1.13.0
+pgvector>=0.2.5
+
+# ---- Pydantic / Settings ----
+pydantic>=2.7.0
+pydantic-settings>=2.2.0
+
+# ---- Structured Logging ----
+structlog>=24.1.0
+rich>=13.7.0          # Pretty console output for dev
+
+# ---- Security / Auth ----
+python-jose[cryptography]>=3.3.0
+passlib[bcrypt]>=1.7.4
+
+# ---- Messaging (RabbitMQ) ----
+aio-pika>=9.4.0
+
+# ---- Cache (Redis) ----
+redis[hiredis]>=5.0.0
+
+# ---- Object Storage ----
+aioboto3>=12.3.0
+miniopy-async>=1.19.0
+
+# ---- OpenTelemetry ----
+opentelemetry-api>=1.24.0
+opentelemetry-sdk>=1.24.0
+opentelemetry-instrumentation-fastapi>=0.45b0
+opentelemetry-instrumentation-sqlalchemy>=0.45b0
+opentelemetry-instrumentation-redis>=0.45b0
+opentelemetry-exporter-otlp-proto-grpc>=1.24.0
+
+# ---- Metrics ----
+prometheus-client>=0.20.0
+prometheus-fastapi-instrumentator>=6.1.0
+
+# ---- Resilience ----
+tenacity>=8.2.3
+
+# ---- Utilities ----
+python-dateutil>=2.9.0

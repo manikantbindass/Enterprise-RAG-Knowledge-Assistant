@@ -1,0 +1,51 @@
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: rag-app-config
+  namespace: rag-app
+  labels:
+    app.kubernetes.io/name: rag-assistant
+    app.kubernetes.io/component: config
+    app.kubernetes.io/managed-by: kubectl
+data:
+  # Application environment
+  ENVIRONMENT: "production"
+  LOG_LEVEL: "INFO"
+
+  # Vector database
+  VECTOR_DB_BACKEND: "pgvector"
+
+  # Document chunking
+  DEFAULT_CHUNK_SIZE: "512"
+  DEFAULT_CHUNK_OVERLAP: "50"
+  DEFAULT_CHUNKING_STRATEGY: "recursive"
+
+  # File upload
+  MAX_FILE_SIZE_MB: "100"
+
+  # OCR
+  ENABLE_OCR: "true"
+  OCR_ENGINE: "tesseract"
+
+  # Rate limiting
+  RATE_LIMIT_PER_MINUTE: "60"
+
+  # Observability
+  PROMETHEUS_ENABLED: "true"
+  OTEL_EXPORTER_OTLP_ENDPOINT: "http://otel-collector:4317"
+  OTEL_SERVICE_VERSION: "1.0.0"
+
+  # Cost tracking
+  ENABLE_COST_TRACKING: "true"
+
+  # Keycloak
+  KEYCLOAK_REALM: "rag-enterprise"
+  KEYCLOAK_AUTH_SERVER_URL: "http://keycloak:8080"
+
+  # RabbitMQ
+  RABBITMQ_VHOST: "/"
+
+  # Database
+  DB_POOL_SIZE: "10"
+  DB_MAX_OVERFLOW: "20"
+  DB_POOL_TIMEOUT: "30"

@@ -1,0 +1,198 @@
+---
+# Services manifest: ClusterIP for internal services, LoadBalancer for external
+# All ports follow the pattern: named ports for readability in network policies
+
+# ─── API Gateway ─────────────────────────────────────────────────────────────
+# External access via LoadBalancer (or use Ingress + ClusterIP)
+apiVersion: v1
+kind: Service
+metadata:
+  name: api-gateway
+  namespace: rag-app
+  labels:
+    app.kubernetes.io/name: api-gateway
+    app.kubernetes.io/component: gateway
+    app.kubernetes.io/part-of: rag-assistant
+  annotations:
+    # AWS: provision an NLB (Network Load Balancer) for lower latency
+    service.beta.kubernetes.io/aws-load-balancer-type: "nlb"
+    service.beta.kubernetes.io/aws-load-balancer-scheme: "internet-facing"
+    service.beta.kubernetes.io/aws-load-balancer-cross-zone-load-balancing-enabled: "true"
+    # Preserve client source IP
+    service.beta.kubernetes.io/aws-load-balancer-target-group-attributes: "preserve_client_ip.enabled=true"
+spec:
+  type: LoadBalancer
+  selector:
+    app: api-gateway
+  ports:
+    - name: http
+      port: 80
+      targetPort: http
+      protocol: TCP
+    - name: https
+      port: 443
+      targetPort: http
+      protocol: TCP
+  # Preserve client IP (don't SNAT)
+  externalTrafficPolicy: Local
+  # Session affinity: stick user to same pod for streaming responses
+  sessionAffinity: ClientIP
+  sessionAffinityConfig:
+    clientIP:
+      timeoutSeconds: 300
+
+---
+# API Gateway internal ClusterIP (for service-to-service calls)
+apiVersion: v1
+kind: Service
+metadata:
+  name: api-gateway-internal
+  namespace: rag-app
+  labels:
+    app.kubernetes.io/name: api-gateway
+    app.kubernetes.io/component: gateway-internal
+spec:
+  type: ClusterIP
+  selector:
+    app: api-gateway
+  ports:
+    - name: http
+      port: 8000
+      targetPort: http
+      protocol: TCP
+    - name: metrics
+      port: 9090
+      targetPort: metrics
+      protocol: TCP
+
+---
+# ─── Chat Service ─────────────────────────────────────────────────────────────
+apiVersion: v1
+kind: Service
+metadata:
+  name: chat-service
+  namespace: rag-app
+  labels:
+    app.kubernetes.io/name: chat-service
+    app.kubernetes.io/component: chat
+    app.kubernetes.io/part-of: rag-assistant
+spec:
+  type: ClusterIP
+  selector:
+    app: chat-service
+  ports:
+    - name: http
+      port: 8001
+      targetPort: http
+      protocol: TCP
+    - name: metrics
+      port: 9090
+      targetPort: metrics
+      protocol: TCP
+
+---
+# ─── Frontend ─────────────────────────────────────────────────────────────────
+# External access via LoadBalancer; Ingress routes /* here
+apiVersion: v1
+kind: Service
+metadata:
+  name: frontend
+  namespace: rag-app
+  labels:
+    app.kubernetes.io/name: frontend
+    app.kubernetes.io/component: frontend
+    app.kubernetes.io/part-of: rag-assistant
+  annotations:
+    service.beta.kubernetes.io/aws-load-balancer-type: "nlb"
+    service.beta.kubernetes.io/aws-load-balancer-scheme: "internet-facing"
+spec:
+  type: LoadBalancer
+  selector:
+    app: frontend
+  ports:
+    - name: http
+      port: 80
+      targetPort: http
+      protocol: TCP
+    - name: https
+      port: 443
+      targetPort: http
+      protocol: TCP
+  externalTrafficPolicy: Local
+
+---
+# Frontend internal ClusterIP (for Ingress backend)
+apiVersion: v1
+kind: Service
+metadata:
+  name: frontend-internal
+  namespace: rag-app
+  labels:
+    app.kubernetes.io/name: frontend
+    app.kubernetes.io/component: frontend-internal
+spec:
+  type: ClusterIP
+  selector:
+    app: frontend
+  ports:
+    - name: http
+      port: 8080
+      targetPort: http
+      protocol: TCP
+    - name: metrics
+      port: 9113
+      targetPort: metrics
+      protocol: TCP
+
+---
+# ─── Processing Worker (no HTTP ingress, only metrics) ──────────────────────
+apiVersion: v1
+kind: Service
+metadata:
+  name: processing-worker
+  namespace: rag-app
+  labels:
+    app.kubernetes.io/name: processing-worker
+    app.kubernetes.io/component: worker
+    app.kubernetes.io/part-of: rag-assistant
+spec:
+  type: ClusterIP
+  # Headless: workers don't need load-balanced access
+  clusterIP: None
+  selector:
+    app: processing-worker
+  ports:
+    - name: metrics
+      port: 9090
+      targetPort: metrics
+      protocol: TCP
+    - name: health
+      port: 8002
+      targetPort: health
+      protocol: TCP
+
+---
+# ─── Embedding Worker (no HTTP ingress, only metrics) ───────────────────────
+apiVersion: v1
+kind: Service
+metadata:
+  name: embedding-worker
+  namespace: rag-app
+  labels:
+    app.kubernetes.io/name: embedding-worker
+    app.kubernetes.io/component: worker
+    app.kubernetes.io/part-of: rag-assistant
+spec:
+  type: ClusterIP
+  clusterIP: None
+  selector:
+    app: embedding-worker
+  ports:
+    - name: metrics
+      port: 9090
+      targetPort: metrics
+      protocol: TCP
+    - name: health
+      port: 8003
+      targetPort: health
+      protocol: TCP

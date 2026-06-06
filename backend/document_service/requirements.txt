@@ -1,0 +1,41 @@
+# Web framework
+fastapi==0.115.5
+uvicorn[standard]==0.32.1
+python-multipart==0.0.12
+
+# Pydantic + settings
+pydantic==2.10.3
+pydantic-settings==2.6.1
+
+# Database
+sqlalchemy[asyncio]==2.0.36
+asyncpg==0.30.0
+alembic==1.14.0
+
+# Storage
+boto3==1.35.74
+minio==7.2.11
+
+# File type detection
+python-magic==0.4.27
+
+# Message queue
+aio-pika==9.5.1
+
+# Virus scanning
+pyclamd==0.4.1
+
+# Imaging (for MIME detection of images)
+Pillow==11.0.0
+
+# Observability
+structlog==24.4.0
+prometheus-client==0.21.1
+opentelemetry-api==1.28.4
+opentelemetry-sdk==1.28.4
+opentelemetry-instrumentation-fastapi==0.49b4
+opentelemetry-exporter-otlp==1.28.4
+
+# Utilities
+python-dateutil==2.9.0
+httpx==0.28.0

@@ -1,0 +1,239 @@
+---
+# Processing Worker Deployment
+# 2 baseline replicas, KEDA scales based on RabbitMQ queue depth
+# Processes: PDF parsing, text extraction, chunking, metadata extraction
+
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: processing-worker
+  namespace: rag-app
+  labels:
+    app.kubernetes.io/name: processing-worker
+    app.kubernetes.io/component: worker
+    app.kubernetes.io/part-of: rag-assistant
+    app.kubernetes.io/version: "1.0.0"
+spec:
+  replicas: 2
+  revisionHistoryLimit: 5
+  selector:
+    matchLabels:
+      app: processing-worker
+  strategy:
+    type: RollingUpdate
+    rollingUpdate:
+      maxSurge: 2
+      maxUnavailable: 1    # workers are stateless; allow disruption
+  template:
+    metadata:
+      labels:
+        app: processing-worker
+        app.kubernetes.io/name: processing-worker
+        app.kubernetes.io/component: worker
+        prometheus-scrape: "true"
+        version: "1.0.0"
+      annotations:
+        prometheus.io/scrape: "true"
+        prometheus.io/port: "9090"
+        prometheus.io/path: "/metrics"
+    spec:
+      serviceAccountName: processing-worker-sa
+      automountServiceAccountToken: false
+      # Long termination: finish current document before dying
+      terminationGracePeriodSeconds: 300
+
+      securityContext:
+        runAsNonRoot: true
+        runAsUser: 1000
+        runAsGroup: 1000
+        fsGroup: 1000
+        seccompProfile:
+          type: RuntimeDefault
+
+      affinity:
+        podAntiAffinity:
+          preferredDuringSchedulingIgnoredDuringExecution:
+            - weight: 50
+              podAffinityTerm:
+                labelSelector:
+                  matchExpressions:
+                    - key: app
+                      operator: In
+                      values:
+                        - processing-worker
+                topologyKey: kubernetes.io/hostname
+
+      containers:
+        - name: processing-worker
+          image: your-registry/rag-processing-worker:latest
+          imagePullPolicy: Always
+          ports:
+            - name: metrics
+              containerPort: 9090
+              protocol: TCP
+            - name: health
+              containerPort: 8002
+              protocol: TCP
+
+          # Higher CPU for document parsing (PDFs, OCR if enabled)
+          resources:
+            requests:
+              cpu: "500m"
+              memory: "512Mi"
+            limits:
+              cpu: "2000m"
+              memory: "2Gi"
+
+          envFrom:
+            - configMapRef:
+                name: rag-app-config
+            - secretRef:
+                name: rag-app-secrets
+
+          env:
+            - name: OTEL_SERVICE_NAME
+              value: "processing-worker"
+            - name: WORKER_TYPE
+              value: "processing"
+            - name: WORKER_CONCURRENCY
+              value: "4"
+            - name: POD_NAME
+              valueFrom:
+                fieldRef:
+                  fieldPath: metadata.name
+            - name: POD_NAMESPACE
+              valueFrom:
+                fieldRef:
+                  fieldPath: metadata.namespace
+            - name: POD_IP
+              valueFrom:
+                fieldRef:
+                  fieldPath: status.podIP
+
+          livenessProbe:
+            httpGet:
+              path: /health/live
+              port: health
+            initialDelaySeconds: 30
+            periodSeconds: 30
+            timeoutSeconds: 10
+            failureThreshold: 3
+
+          readinessProbe:
+            httpGet:
+              path: /health/ready
+              port: health
+            initialDelaySeconds: 20
+            periodSeconds: 15
+            timeoutSeconds: 5
+            failureThreshold: 3
+
+          startupProbe:
+            httpGet:
+              path: /health/live
+              port: health
+            initialDelaySeconds: 10
+            periodSeconds: 10
+            timeoutSeconds: 5
+            failureThreshold: 30
+
+          securityContext:
+            allowPrivilegeEscalation: false
+            readOnlyRootFilesystem: true
+            capabilities:
+              drop:
+                - ALL
+
+          volumeMounts:
+            - name: tmp
+              mountPath: /tmp
+            - name: workspace
+              mountPath: /workspace     # temp document processing space
+
+          lifecycle:
+            preStop:
+              exec:
+                # Signal worker to finish current task, don't pick new ones
+                command: ["/bin/sh", "-c", "kill -SIGTERM 1 && sleep 30"]
+
+      volumes:
+        - name: tmp
+          emptyDir: {}
+        - name: workspace
+          emptyDir:
+            sizeLimit: 5Gi    # prevent runaway disk usage from large PDFs
+
+      imagePullSecrets:
+        - name: registry-credentials
+
+---
+# KEDA ScaledObject: scale based on RabbitMQ document_processing queue depth
+# Install KEDA first: https://keda.sh/docs/latest/deploy/
+apiVersion: keda.sh/v1alpha1
+kind: ScaledObject
+metadata:
+  name: processing-worker-scaler
+  namespace: rag-app
+  labels:
+    app.kubernetes.io/name: processing-worker
+    app.kubernetes.io/component: autoscaler
+spec:
+  scaleTargetRef:
+    name: processing-worker
+  pollingInterval: 15       # check queue every 15 seconds
+  cooldownPeriod: 60        # wait 60s after scale-down event
+  minReplicaCount: 2        # always 2 baseline workers
+  maxReplicaCount: 20
+  advanced:
+    restoreToOriginalReplicaCount: true
+    horizontalPodAutoscalerConfig:
+      behavior:
+        scaleDown:
+          stabilizationWindowSeconds: 120
+          policies:
+            - type: Pods
+              value: 2
+              periodSeconds: 60
+        scaleUp:
+          stabilizationWindowSeconds: 30
+          policies:
+            - type: Pods
+              value: 4
+              periodSeconds: 30
+  triggers:
+    - type: rabbitmq
+      metadata:
+        protocol: amqp
+        queueName: document_processing
+        mode: QueueLength
+        value: "10"     # 1 worker per 10 queued messages
+        # Host pulled from secret
+        hostFromEnv: RABBITMQ_KEDA_URL
+      authenticationRef:
+        name: rabbitmq-trigger-auth
+
+---
+# TriggerAuthentication: supply RabbitMQ credentials to KEDA
+apiVersion: keda.sh/v1alpha1
+kind: TriggerAuthentication
+metadata:
+  name: rabbitmq-trigger-auth
+  namespace: rag-app
+spec:
+  secretTargetRef:
+    - parameter: host
+      name: rag-app-secrets
+      key: RABBITMQ_KEDA_URL
+
+---
+# PodDisruptionBudget: allow at most 1 disruption at a time
+apiVersion: policy/v1
+kind: PodDisruptionBudget
+metadata:
+  name: processing-worker-pdb
+  namespace: rag-app
+spec:
+  maxUnavailable: 1
+  selector:
+    matchLabels:
+      app: processing-worker

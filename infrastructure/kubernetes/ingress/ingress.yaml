@@ -1,0 +1,197 @@
+---
+# NGINX Ingress for Enterprise RAG Knowledge Assistant
+# Prerequisites:
+#   - nginx ingress controller installed (helm install ingress-nginx ingress-nginx/ingress-nginx)
+#   - cert-manager installed (helm install cert-manager jetstack/cert-manager)
+#   - ClusterIssuer "letsencrypt-prod" configured for TLS
+
+apiVersion: networking.k8s.io/v1
+kind: Ingress
+metadata:
+  name: rag-assistant-ingress
+  namespace: rag-app
+  labels:
+    app.kubernetes.io/name: rag-assistant
+    app.kubernetes.io/component: ingress
+    app.kubernetes.io/part-of: rag-assistant
+  annotations:
+    # ─── Ingress Class ─────────────────────────────────────────────────────
+    kubernetes.io/ingress.class: "nginx"
+
+    # ─── TLS: cert-manager auto-provision ──────────────────────────────────
+    cert-manager.io/cluster-issuer: "letsencrypt-prod"
+    cert-manager.io/acme-challenge-type: "http01"
+
+    # ─── Rate Limiting ─────────────────────────────────────────────────────
+    # Global: 100 req/min per IP
+    nginx.ingress.kubernetes.io/limit-rps: "20"
+    nginx.ingress.kubernetes.io/limit-rpm: "100"
+    nginx.ingress.kubernetes.io/limit-burst-multiplier: "5"
+    nginx.ingress.kubernetes.io/limit-connections: "20"
+    # Rate limit by header (use X-API-Key if available, else IP)
+    nginx.ingress.kubernetes.io/limit-req-status-code: "429"
+
+    # ─── Proxy Settings ────────────────────────────────────────────────────
+    nginx.ingress.kubernetes.io/proxy-body-size: "100m"      # max upload size
+    nginx.ingress.kubernetes.io/proxy-read-timeout: "300"    # 5min for LLM streaming
+    nginx.ingress.kubernetes.io/proxy-send-timeout: "300"
+    nginx.ingress.kubernetes.io/proxy-connect-timeout: "10"
+    nginx.ingress.kubernetes.io/proxy-buffering: "off"       # required for SSE streaming
+
+    # ─── CORS ──────────────────────────────────────────────────────────────
+    nginx.ingress.kubernetes.io/enable-cors: "true"
+    nginx.ingress.kubernetes.io/cors-allow-origin: "https://app.enterprise.dev,https://admin.enterprise.dev"
+    nginx.ingress.kubernetes.io/cors-allow-methods: "GET, POST, PUT, DELETE, PATCH, OPTIONS"
+    nginx.ingress.kubernetes.io/cors-allow-headers: "Authorization,Content-Type,X-Request-ID,X-Correlation-ID"
+    nginx.ingress.kubernetes.io/cors-allow-credentials: "true"
+    nginx.ingress.kubernetes.io/cors-max-age: "3600"
+
+    # ─── Security Headers ──────────────────────────────────────────────────
+    nginx.ingress.kubernetes.io/configuration-snippet: |
+      more_set_headers "X-Frame-Options: SAMEORIGIN";
+      more_set_headers "X-Content-Type-Options: nosniff";
+      more_set_headers "X-XSS-Protection: 1; mode=block";
+      more_set_headers "Referrer-Policy: strict-origin-when-cross-origin";
+      more_set_headers "Strict-Transport-Security: max-age=31536000; includeSubDomains; preload";
+      more_set_headers "Permissions-Policy: camera=(), microphone=(), geolocation=()";
+
+    # ─── Server Snippet (nginx.conf level) ─────────────────────────────────
+    nginx.ingress.kubernetes.io/server-snippet: |
+      # Deny common attack patterns
+      if ($request_uri ~* "(\.\./|\.\.%2F|%2e%2e%2f)") {
+        return 400;
+      }
+      # Block known bad user agents
+      if ($http_user_agent ~* "(sqlmap|nikto|nmap|masscan|Nuclei)") {
+        return 403;
+      }
+
+    # ─── WebSocket / SSE support ───────────────────────────────────────────
+    nginx.ingress.kubernetes.io/proxy-http-version: "1.1"
+    nginx.ingress.kubernetes.io/upstream-keepalive-connections: "100"
+
+    # ─── Rewrite Rules ─────────────────────────────────────────────────────
+    # Strip /api prefix before forwarding to api-gateway
+    # (api-gateway serves under /v1, not /api/v1)
+    nginx.ingress.kubernetes.io/use-regex: "true"
+    nginx.ingress.kubernetes.io/rewrite-target: "/$2"
+
+spec:
+  ingressClassName: nginx
+
+  # TLS: cert-manager will provision Let's Encrypt certificate
+  tls:
+    - hosts:
+        - app.enterprise.dev
+        - api.enterprise.dev
+      secretName: rag-tls-cert
+
+  rules:
+    # ─── API routes → api-gateway ─────────────────────────────────────────
+    - host: api.enterprise.dev
+      http:
+        paths:
+          - path: /()(.*)
+            pathType: ImplementationSpecific
+            backend:
+              service:
+                name: api-gateway-internal
+                port:
+                  name: http
+
+    # ─── App routes ───────────────────────────────────────────────────────
+    - host: app.enterprise.dev
+      http:
+        paths:
+          # /api/* → api-gateway (strip /api prefix)
+          - path: /api(/|$)(.*)
+            pathType: ImplementationSpecific
+            backend:
+              service:
+                name: api-gateway-internal
+                port:
+                  name: http
+          # /* → frontend
+          - path: /()(.*)
+            pathType: ImplementationSpecific
+            backend:
+              service:
+                name: frontend-internal
+                port:
+                  name: http
+
+---
+# Separate ingress for monitoring (restricted to internal / VPN)
+apiVersion: networking.k8s.io/v1
+kind: Ingress
+metadata:
+  name: monitoring-ingress
+  namespace: monitoring
+  labels:
+    app.kubernetes.io/name: monitoring
+    app.kubernetes.io/component: ingress
+  annotations:
+    kubernetes.io/ingress.class: "nginx"
+    cert-manager.io/cluster-issuer: "letsencrypt-prod"
+    # Restrict to internal CIDR (your VPN/office IP range)
+    nginx.ingress.kubernetes.io/whitelist-source-range: "10.0.0.0/8,172.16.0.0/12,192.168.0.0/16"
+    # Basic auth for extra protection
+    nginx.ingress.kubernetes.io/auth-type: basic
+    nginx.ingress.kubernetes.io/auth-secret: monitoring-basic-auth
+    nginx.ingress.kubernetes.io/auth-realm: "Enterprise RAG Monitoring"
+spec:
+  ingressClassName: nginx
+  tls:
+    - hosts:
+        - monitoring.enterprise.dev
+      secretName: monitoring-tls-cert
+  rules:
+    - host: monitoring.enterprise.dev
+      http:
+        paths:
+          - path: /grafana(/|$)(.*)
+            pathType: ImplementationSpecific
+            backend:
+              service:
+                name: grafana
+                port:
+                  number: 3000
+          - path: /prometheus(/|$)(.*)
+            pathType: ImplementationSpecific
+            backend:
+              service:
+                name: prometheus
+                port:
+                  number: 9090
+          - path: /jaeger(/|$)(.*)
+            pathType: ImplementationSpecific
+            backend:
+              service:
+                name: jaeger-query
+                port:
+                  number: 16686
+          - path: /alertmanager(/|$)(.*)
+            pathType: ImplementationSpecific
+            backend:
+              service:
+                name: alertmanager
+                port:
+                  number: 9093
+
+---
+# ClusterIssuer for Let's Encrypt (cert-manager)
+# Apply once per cluster
+apiVersion: cert-manager.io/v1
+kind: ClusterIssuer
+metadata:
+  name: letsencrypt-prod
+spec:
+  acme:
+    server: https://acme-v02.api.letsencrypt.org/directory
+    email: devops@enterprise.dev    # Change to your ops email
+    privateKeySecretRef:
+      name: letsencrypt-prod-private-key
+    solvers:
+      - http01:
+          ingress:
+            class: nginx

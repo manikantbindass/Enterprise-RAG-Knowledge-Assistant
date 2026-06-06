@@ -1,0 +1,42 @@
+# Web framework
+fastapi==0.115.5
+uvicorn[standard]==0.32.1
+
+# HTTP client for proxying
+httpx==0.27.2
+
+# Auth
+python-jose[cryptography]==3.3.0
+passlib[bcrypt]==1.7.4
+
+# Redis
+redis[hiredis]==5.2.1
+
+# Database
+sqlalchemy[asyncio]==2.0.36
+asyncpg==0.30.0
+alembic==1.14.0
+
+# Settings / config
+pydantic-settings==2.6.1
+pydantic[email]==2.10.3
+
+# File uploads
+python-multipart==0.0.17
+
+# Observability
+opentelemetry-api==1.29.0
+opentelemetry-sdk==1.29.0
+opentelemetry-instrumentation-fastapi==0.50b0
+opentelemetry-instrumentation-httpx==0.50b0
+opentelemetry-instrumentation-redis==0.50b0
+opentelemetry-exporter-otlp-proto-grpc==1.29.0
+prometheus-fastapi-instrumentator==7.0.0
+structlog==24.4.0
+
+# Retry / resilience
+tenacity==9.0.0
+
+# Utilities
+python-dateutil==2.9.0
+orjson==3.10.12
