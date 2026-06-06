@@ -1,0 +1,33 @@
+global:
+  scrape_interval: 15s
+  evaluation_interval: 15s
+  external_labels:
+    monitor: 'rag-enterprise'
+
+rule_files:
+  - "alerts.yml"
+
+scrape_configs:
+  - job_name: 'api_gateway'
+    static_configs:
+      - targets: ['api_gateway:8000']
+    metrics_path: /metrics
+
+  - job_name: 'chat_service'
+    static_configs:
+      - targets: ['chat_service:8006']
+    metrics_path: /metrics
+
+  - job_name: 'vector_service'
+    static_configs:
+      - targets: ['vector_service:8005']
+    metrics_path: /metrics
+
+  - job_name: 'document_service'
+    static_configs:
+      - targets: ['document_service:8003']
+    metrics_path: /metrics
+
+  - job_name: 'prometheus'
+    static_configs:
+      - targets: ['localhost:9090']
