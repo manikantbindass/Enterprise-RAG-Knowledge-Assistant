@@ -202,13 +202,24 @@ export function AppStoreProvider({ children }: { children: React.ReactNode }) {
         if (Array.isArray(saved.documents)) {
           dispatch({
             type: 'LOAD', state: {
-              documents: saved.documents,
-              conversations: (saved.conversations ?? []).map(c => ({
-                ...c,
-                messages: c.messages.map(m => ({ ...m, isStreaming: false }))
-              })),
-              queryLogs: saved.queryLogs ?? [],
-              users: saved.users ?? [],
+              // Sanitize docs: ensure required fields are valid types
+              documents: saved.documents
+                .filter(d => d && typeof d.id === 'string' && typeof d.name === 'string')
+                .map(d => ({
+                  ...d,
+                  chunks: Array.isArray(d.chunks) ? d.chunks : [],
+                  status: ['uploading', 'processing', 'indexed', 'error'].includes(d.status) ? d.status : 'indexed',
+                  content: typeof d.content === 'string' ? d.content : '',
+                  canQuery: Array.isArray(d.chunks) && d.chunks.length > 0,
+                })),
+              conversations: (saved.conversations ?? [])
+                .filter(c => c && typeof c.id === 'string')
+                .map(c => ({
+                  ...c,
+                  messages: (c.messages ?? []).map(m => ({ ...m, isStreaming: false }))
+                })),
+              queryLogs: (saved.queryLogs ?? []).filter(q => q && typeof q.id === 'string'),
+              users: (saved.users ?? []).filter(u => u && typeof u.id === 'string'),
               settings: { ...DEFAULT_SETTINGS, ...(saved.settings ?? {}) },
             }
           })
