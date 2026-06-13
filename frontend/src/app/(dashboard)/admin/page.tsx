@@ -69,22 +69,23 @@ export default function AdminPage() {
       name: form.name.trim(),
       email: form.email.trim(),
       role: form.role,
-      department: form.department.trim() || undefined,
+      department: form.department.trim() || 'General',
       active: true,
-      queryCount: 0,
+      queries: 0,
       joinedAt: new Date().toISOString(),
     }
-    dispatch({ type: 'ADD_USER', payload: newUser })
+    dispatch({ type: 'ADD_USER', user: newUser })
     setForm({ name: '', email: '', role: 'user', department: '' })
     setShowInvite(false)
   }
 
   function toggleActive(id: string) {
-    dispatch({ type: 'TOGGLE_USER_ACTIVE', payload: { id } })
+    const user = allUsers.find(u => u.id === id)
+    if (user) dispatch({ type: 'UPDATE_USER', id, patch: { active: !user.active } })
   }
 
   function deleteUser(id: string) {
-    dispatch({ type: 'DELETE_USER', payload: { id } })
+    dispatch({ type: 'DELETE_USER', id })
   }
 
   // Analytics
@@ -109,7 +110,7 @@ export default function AdminPage() {
     .slice(0, 5)
 
   // Leaderboard
-  const leaderboard = [...allUsers].sort((a, b) => (b.queryCount ?? 0) - (a.queryCount ?? 0))
+  const leaderboard = [...allUsers].sort((a, b) => (b.queries ?? 0) - (a.queries ?? 0))
 
   const tabs = [
     { id: 'users', label: 'Users', icon: Users },
@@ -220,7 +221,7 @@ export default function AdminPage() {
                         {user.department ?? <span className="text-slate-600">—</span>}
                       </td>
                       <td className="px-5 py-3 text-slate-300 hidden lg:table-cell">
-                        {user.queryCount ?? 0}
+                        {user.queries ?? 0}
                       </td>
                       <td className="px-5 py-3 text-slate-400 text-xs hidden xl:table-cell">
                         {user.joinedAt ? relativeTime(user.joinedAt) : '—'}
@@ -419,7 +420,7 @@ export default function AdminPage() {
                         <p className="text-slate-500 text-xs truncate">{user.email}</p>
                       </div>
                       <span className="text-indigo-300 text-xs font-semibold">
-                        {user.queryCount ?? 0}
+                        {user.queries ?? 0}
                       </span>
                     </div>
                   ))}

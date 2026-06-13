@@ -109,7 +109,7 @@ export default function SettingsPage() {
   }
 
   const updateSetting = (patch: Record<string, unknown>, flashKey?: string) => {
-    dispatch({ type: 'UPDATE_SETTINGS', payload: patch })
+    dispatch({ type: 'UPDATE_SETTINGS', patch: patch as any })
     if (flashKey) flash(flashKey)
   }
 
@@ -134,8 +134,13 @@ export default function SettingsPage() {
       setConfirmClear(true)
       return
     }
-    localStorage.clear()
-    dispatch({ type: 'RESET_STATE' })
+    try { localStorage.removeItem('rag_app_v2') } catch {}
+    dispatch({
+      type: 'LOAD', state: {
+        documents: [], conversations: [], queryLogs: [], users: [],
+        settings: { model: 'gpt-4o', temperature: 0.2, maxTokens: 2048, openaiApiKey: '', orgName: 'My Organization', topK: 5, chunkSize: 400 }
+      }
+    })
     setConfirmClear(false)
     flash('clear')
   }
@@ -143,7 +148,7 @@ export default function SettingsPage() {
   // ── API handlers ──────────────────────────────────────────────────────────
 
   const handleSaveApiKey = () => {
-    dispatch({ type: 'UPDATE_SETTINGS', payload: { openaiApiKey: localApiKey } })
+    dispatch({ type: 'UPDATE_SETTINGS', patch: { openaiApiKey: localApiKey } })
     flash('apiKey')
   }
 
@@ -154,7 +159,7 @@ export default function SettingsPage() {
     ).join('')
     const key = `rag_${rand}`
     setLocalApiKey(key)
-    dispatch({ type: 'UPDATE_SETTINGS', payload: { openaiApiKey: key } })
+    dispatch({ type: 'UPDATE_SETTINGS', patch: { openaiApiKey: key } })
     flash('apiKey')
   }
 
@@ -886,7 +891,7 @@ export default function SettingsPage() {
                   <div className="info-tile">
                     <div className="info-tile-label">User Role</div>
                     <div className="info-tile-value">
-                      {state.user?.role ?? 'Admin'}
+                      {(() => { try { return JSON.parse(localStorage.getItem('rag_user') ?? '{}').role ?? 'Admin' } catch { return 'Admin' } })()}
                     </div>
                   </div>
                   <div className="info-tile">

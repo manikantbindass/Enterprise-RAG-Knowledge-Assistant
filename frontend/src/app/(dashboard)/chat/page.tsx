@@ -222,7 +222,7 @@ export default function ChatPage() {
 
     // Stream it
     await streamText(convId, assistantId, responseText, sources)
-  }, [input, currentConvId, currentConv, isStreaming, attachedFiles, indexedDocs, settings, dispatch, state.conversations, streamText, buildChunks])
+  }, [input, currentConvId, currentConv, isStreaming, attachedFiles, indexedDocs, settings, dispatch, streamText])
 
   const handleKeyDown = (e: React.KeyboardEvent<HTMLTextAreaElement>) => {
     if (e.key === 'Enter' && !e.shiftKey) { e.preventDefault(); sendMessage() }
