@@ -1,4 +1,6 @@
-# 🧠 Enterprise RAG Knowledge Assistant
+<p align="center">
+  <img src="docs/assets/animated_title.svg" alt="Enterprise RAG Knowledge Assistant" width="800"/>
+</p>
 
 <p align="center">
   <img src="https://img.shields.io/badge/Next.js-15-black?logo=next.js" />
