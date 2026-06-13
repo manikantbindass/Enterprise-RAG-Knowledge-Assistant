@@ -1,4 +1,4 @@
-# 🧠 Enterprise RAG Knowledge Assistant — manikantbindass
+# 🧠 Enterprise RAG Knowledge Assistant
 
 <p align="center">
   <img src="docs/assets/banner.png" alt="Enterprise RAG Knowledge Assistant" width="800"/>
