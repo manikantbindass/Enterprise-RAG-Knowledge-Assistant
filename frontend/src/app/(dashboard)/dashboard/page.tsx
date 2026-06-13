@@ -1,208 +1,384 @@
 'use client'
-
+import { useMemo } from 'react'
 import { motion } from 'framer-motion'
-import { FileText, Search, MessageSquare, Users, TrendingUp, DollarSign, Clock, CheckCircle } from 'lucide-react'
-import { AreaChart, Area, BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer } from 'recharts'
+import { FileText, Search, Users, Zap, Upload, MessageSquare, TrendingUp, ArrowRight, Database } from 'lucide-react'
+import { useAppStore, isToday, relativeTime } from '@/lib/store'
 import Link from 'next/link'
+import { LineChart, Line, BarChart, Bar, XAxis, YAxis, Tooltip, ResponsiveContainer, CartesianGrid } from 'recharts'
 
-// Stable mock data — seeded to avoid SSR hydration mismatch
-const queryData = [
-  { day: 'Day 1', queries: 312, cost: 3.24 },
-  { day: 'Day 2', queries: 480, cost: 4.91 },
-  { day: 'Day 3', queries: 195, cost: 2.13 },
-  { day: 'Day 4', queries: 540, cost: 5.62 },
-  { day: 'Day 5', queries: 420, cost: 4.33 },
-  { day: 'Day 6', queries: 267, cost: 2.78 },
-  { day: 'Day 7', queries: 380, cost: 3.95 },
-  { day: 'Day 8', queries: 510, cost: 5.28 },
-  { day: 'Day 9', queries: 145, cost: 1.52 },
-  { day: 'Day 10', queries: 490, cost: 5.09 },
-  { day: 'Day 11', queries: 320, cost: 3.33 },
-  { day: 'Day 12', queries: 560, cost: 5.82 },
-  { day: 'Day 13', queries: 230, cost: 2.41 },
-  { day: 'Day 14', queries: 410, cost: 4.27 },
-  { day: 'Day 15', queries: 595, cost: 6.18 },
-  { day: 'Day 16', queries: 275, cost: 2.87 },
-  { day: 'Day 17', queries: 440, cost: 4.58 },
-  { day: 'Day 18', queries: 155, cost: 1.63 },
-  { day: 'Day 19', queries: 520, cost: 5.41 },
-  { day: 'Day 20', queries: 348, cost: 3.62 },
-  { day: 'Day 21', queries: 478, cost: 4.97 },
-  { day: 'Day 22', queries: 210, cost: 2.19 },
-  { day: 'Day 23', queries: 395, cost: 4.11 },
-  { day: 'Day 24', queries: 580, cost: 6.03 },
-  { day: 'Day 25', queries: 120, cost: 1.26 },
-  { day: 'Day 26', queries: 445, cost: 4.63 },
-  { day: 'Day 27', queries: 310, cost: 3.22 },
-  { day: 'Day 28', queries: 498, cost: 5.17 },
-  { day: 'Day 29', queries: 265, cost: 2.76 },
-  { day: 'Day 30', queries: 532, cost: 5.53 },
-]
-
-const deptData = [
-  { dept: 'Legal', docs: 1240 },
-  { dept: 'HR', docs: 890 },
-  { dept: 'Finance', docs: 760 },
-  { dept: 'IT', docs: 540 },
-  { dept: 'Sales', docs: 420 },
-]
-
-const recentActivity = [
-  { user: 'Sarah K.', query: 'What is the vacation policy for remote employees?', latency: '1.2s', time: '2m ago', status: 'success' },
-  { user: 'John D.', query: 'Summarize Q3 financial report highlights', latency: '1.8s', time: '5m ago', status: 'success' },
-  { user: 'Mike R.', query: 'GDPR compliance requirements for EU data', latency: '2.1s', time: '12m ago', status: 'success' },
-  { user: 'Emma L.', query: 'New employee onboarding checklist', latency: '0.9s', time: '18m ago', status: 'success' },
-  { user: 'Alex T.', query: 'Contract termination notice period', latency: '1.4s', time: '25m ago', status: 'success' },
-]
-
-const metrics = [
-  { label: 'Total Documents', value: '24,891', icon: FileText, change: '+12%', color: 'indigo' },
-  { label: 'Indexed Today', value: '347', icon: CheckCircle, change: '+8%', color: 'emerald' },
-  { label: 'Queries Today', value: '8,432', icon: Search, change: '+23%', color: 'violet' },
-  { label: 'Active Users', value: '1,204', icon: Users, change: '+5%', color: 'amber' },
-]
-
-const colorMap: Record<string, string> = {
-  indigo: 'from-indigo-500/20 to-indigo-600/5 border-indigo-500/20 text-indigo-400',
-  emerald: 'from-emerald-500/20 to-emerald-600/5 border-emerald-500/20 text-emerald-400',
-  violet: 'from-violet-500/20 to-violet-600/5 border-violet-500/20 text-violet-400',
-  amber: 'from-amber-500/20 to-amber-600/5 border-amber-500/20 text-amber-400',
+const fadeUp = {
+  hidden: { opacity: 0, y: 24 },
+  show: (i: number) => ({
+    opacity: 1,
+    y: 0,
+    transition: { duration: 0.45, delay: i * 0.08, ease: 'easeOut' },
+  }),
 }
 
 export default function DashboardPage() {
-  return (
-    <div className="space-y-6">
-      {/* Header */}
-      <div className="flex items-center justify-between">
-        <div>
-          <h1 className="text-2xl font-bold text-white">Dashboard</h1>
-          <p className="text-slate-400 text-sm mt-1">Welcome back! Here's what's happening.</p>
-        </div>
-        <div className="flex gap-3">
-          <Link href="/documents" className="px-4 py-2 rounded-lg bg-slate-800 border border-slate-700 text-slate-300 hover:text-white hover:border-slate-600 transition-all text-sm font-medium flex items-center gap-2">
-            <FileText className="w-4 h-4" /> Upload Documents
-          </Link>
-          <Link href="/chat" className="px-4 py-2 rounded-lg bg-indigo-600 hover:bg-indigo-500 text-white transition-all text-sm font-medium flex items-center gap-2 shadow-lg shadow-indigo-600/30">
-            <MessageSquare className="w-4 h-4" /> Start Chat
-          </Link>
-        </div>
-      </div>
+  const { state } = useAppStore()
+  const { documents, queryLogs, users } = state
 
-      {/* Metric Cards */}
-      <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
-        {metrics.map((m, i) => (
+  const isEmpty = documents.length === 0 && queryLogs.length === 0
+
+  // ── Stat values ──────────────────────────────────────────────────────────
+  const totalDocs = documents.length
+  const indexedToday = useMemo(
+    () => documents.filter((d) => isToday(d.uploadedAt)).length,
+    [documents]
+  )
+  const queriesToday = useMemo(
+    () => queryLogs.filter((q) => isToday(q.timestamp)).length,
+    [queryLogs]
+  )
+  const activeUsers = users.length > 0 ? users.length : queryLogs.length > 0 ? 1 : 0
+
+  // ── Queries over time (last 30 days) ─────────────────────────────────────
+  const queriesOverTime = useMemo(() => {
+    const days: Record<string, number> = {}
+    const now = new Date()
+    for (let i = 29; i >= 0; i--) {
+      const d = new Date(now)
+      d.setDate(d.getDate() - i)
+      const key = d.toLocaleDateString('en-US', { month: 'short', day: 'numeric' })
+      days[key] = 0
+    }
+    queryLogs.forEach((q) => {
+      const d = new Date(q.timestamp)
+      const diff = Math.floor((now.getTime() - d.getTime()) / 86400000)
+      if (diff >= 0 && diff < 30) {
+        const key = d.toLocaleDateString('en-US', { month: 'short', day: 'numeric' })
+        if (key in days) days[key]++
+      }
+    })
+    return Object.entries(days).map(([date, count]) => ({ date, count }))
+  }, [queryLogs])
+
+  // ── Docs by department ───────────────────────────────────────────────────
+  const docsByDept = useMemo(() => {
+    const map: Record<string, number> = {}
+    documents.forEach((d) => {
+      const dept = d.department || 'General'
+      map[dept] = (map[dept] || 0) + 1
+    })
+    return Object.entries(map)
+      .map(([dept, count]) => ({ dept, count }))
+      .sort((a, b) => b.count - a.count)
+      .slice(0, 8)
+  }, [documents])
+
+  // ── Recent activity ───────────────────────────────────────────────────────
+  const recentActivity = useMemo(
+    () => [...queryLogs].sort((a, b) => new Date(b.timestamp).getTime() - new Date(a.timestamp).getTime()).slice(0, 5),
+    [queryLogs]
+  )
+
+  // ── Monthly cost estimate ─────────────────────────────────────────────────
+  const llmCost = (queryLogs.length * 0.004).toFixed(2)
+  const embeddingCost = (documents.length * 0.002).toFixed(2)
+  const totalCost = (parseFloat(llmCost) + parseFloat(embeddingCost)).toFixed(2)
+
+  // ── Stat cards config ─────────────────────────────────────────────────────
+  const stats = [
+    {
+      label: 'Total Documents',
+      value: totalDocs,
+      icon: FileText,
+      color: 'from-indigo-500 to-indigo-600',
+      bg: 'bg-indigo-500/10',
+      border: 'border-indigo-500/20',
+    },
+    {
+      label: 'Indexed Today',
+      value: indexedToday,
+      icon: Database,
+      color: 'from-violet-500 to-violet-600',
+      bg: 'bg-violet-500/10',
+      border: 'border-violet-500/20',
+    },
+    {
+      label: 'Queries Today',
+      value: queriesToday,
+      icon: Search,
+      color: 'from-sky-500 to-sky-600',
+      bg: 'bg-sky-500/10',
+      border: 'border-sky-500/20',
+    },
+    {
+      label: 'Active Users',
+      value: activeUsers,
+      icon: Users,
+      color: 'from-emerald-500 to-emerald-600',
+      bg: 'bg-emerald-500/10',
+      border: 'border-emerald-500/20',
+    },
+  ]
+
+  // ── Empty state ───────────────────────────────────────────────────────────
+  if (isEmpty) {
+    return (
+      <div className="min-h-screen bg-slate-950 text-white p-8 flex flex-col">
+        <motion.div
+          initial={{ opacity: 0, y: 20 }}
+          animate={{ opacity: 1, y: 0 }}
+          transition={{ duration: 0.5 }}
+          className="mb-10"
+        >
+          <h1 className="text-3xl font-bold text-white mb-2">Dashboard</h1>
+          <p className="text-slate-400">Your knowledge assistant workspace</p>
+        </motion.div>
+
+        {/* Empty hero */}
+        <motion.div
+          initial={{ opacity: 0, scale: 0.95 }}
+          animate={{ opacity: 1, scale: 1 }}
+          transition={{ duration: 0.5, delay: 0.1 }}
+          className="flex flex-col items-center justify-center flex-1 text-center py-16"
+        >
+          <div className="w-24 h-24 rounded-3xl bg-gradient-to-br from-indigo-500/20 to-violet-500/20 border border-indigo-500/30 flex items-center justify-center mb-6 shadow-lg shadow-indigo-500/10">
+            <Zap className="w-12 h-12 text-indigo-400" />
+          </div>
+          <h2 className="text-2xl font-semibold text-white mb-3">Your workspace is ready</h2>
+          <p className="text-slate-400 max-w-md mb-12 leading-relaxed">
+            Start by uploading documents to your knowledge base or jump straight into a conversation. Stats and charts will appear here as you use the assistant.
+          </p>
+
+          <div className="grid grid-cols-1 sm:grid-cols-2 gap-6 w-full max-w-xl">
+            {[
+              {
+                href: '/documents',
+                icon: Upload,
+                title: 'Upload Your First Document',
+                desc: 'Add PDFs, Word docs, or text files to the knowledge base.',
+                gradient: 'from-indigo-500 to-violet-500',
+                border: 'border-indigo-500/30 hover:border-indigo-400/60',
+              },
+              {
+                href: '/chat',
+                icon: MessageSquare,
+                title: 'Start a Conversation',
+                desc: 'Ask questions and get AI-powered answers from your docs.',
+                gradient: 'from-emerald-500 to-teal-500',
+                border: 'border-emerald-500/30 hover:border-emerald-400/60',
+              },
+            ].map((card, i) => (
+              <motion.div
+                key={card.href}
+                custom={i}
+                variants={fadeUp}
+                initial="hidden"
+                animate="show"
+              >
+                <Link href={card.href}>
+                  <div
+                    className={`group relative rounded-2xl bg-slate-900/80 border ${card.border} p-6 text-left transition-all duration-300 hover:bg-slate-800/80 hover:shadow-xl cursor-pointer`}
+                  >
+                    <div
+                      className={`w-12 h-12 rounded-xl bg-gradient-to-br ${card.gradient} flex items-center justify-center mb-4 shadow-lg`}
+                    >
+                      <card.icon className="w-6 h-6 text-white" />
+                    </div>
+                    <h3 className="text-white font-semibold mb-1">{card.title}</h3>
+                    <p className="text-slate-400 text-sm leading-relaxed">{card.desc}</p>
+                    <ArrowRight className="w-4 h-4 text-slate-500 group-hover:text-white group-hover:translate-x-1 transition-all duration-200 mt-3" />
+                  </div>
+                </Link>
+              </motion.div>
+            ))}
+          </div>
+        </motion.div>
+      </div>
+    )
+  }
+
+  // ── Full dashboard ────────────────────────────────────────────────────────
+  return (
+    <div className="min-h-screen bg-slate-950 text-white p-8">
+      {/* Header */}
+      <motion.div
+        initial={{ opacity: 0, y: -16 }}
+        animate={{ opacity: 1, y: 0 }}
+        transition={{ duration: 0.4 }}
+        className="mb-8"
+      >
+        <h1 className="text-3xl font-bold text-white mb-1">Dashboard</h1>
+        <p className="text-slate-400">Real-time overview of your knowledge assistant</p>
+      </motion.div>
+
+      {/* Stat cards */}
+      <div className="grid grid-cols-2 lg:grid-cols-4 gap-4 mb-8">
+        {stats.map((s, i) => (
           <motion.div
-            key={m.label}
-            initial={{ opacity: 0, y: 20 }}
-            animate={{ opacity: 1, y: 0 }}
-            transition={{ delay: i * 0.05 }}
-            className={`p-5 rounded-xl border bg-gradient-to-br ${colorMap[m.color]} backdrop-blur-sm`}
+            key={s.label}
+            custom={i}
+            variants={fadeUp}
+            initial="hidden"
+            animate="show"
+            className={`rounded-2xl bg-slate-900/70 border ${s.border} p-5 flex flex-col gap-3 backdrop-blur-sm`}
           >
-            <div className="flex items-center justify-between mb-3">
-              <m.icon className="w-5 h-5 opacity-80" />
-              <span className="text-xs text-emerald-400 font-medium bg-emerald-400/10 px-2 py-0.5 rounded-full">{m.change}</span>
+            <div className={`w-10 h-10 rounded-xl ${s.bg} flex items-center justify-center`}>
+              <s.icon className={`w-5 h-5 bg-gradient-to-br ${s.color} bg-clip-text`} style={{ color: 'transparent', WebkitBackgroundClip: 'text' }} />
             </div>
-            <div className="text-2xl font-bold text-white">{m.value}</div>
-            <div className="text-xs text-slate-400 mt-1">{m.label}</div>
+            <div>
+              <p className="text-3xl font-bold text-white tabular-nums">{s.value.toLocaleString()}</p>
+              <p className="text-slate-400 text-sm mt-0.5">{s.label}</p>
+            </div>
           </motion.div>
         ))}
       </div>
 
-      {/* Charts Row */}
-      <div className="grid grid-cols-1 lg:grid-cols-3 gap-4">
+      {/* Charts row */}
+      <div className="grid grid-cols-1 lg:grid-cols-2 gap-6 mb-6">
         {/* Queries over time */}
-        <div className="lg:col-span-2 p-5 rounded-xl border border-slate-800 bg-slate-900/50 backdrop-blur-sm">
-          <div className="flex items-center justify-between mb-4">
+        <motion.div
+          custom={4}
+          variants={fadeUp}
+          initial="hidden"
+          animate="show"
+          className="rounded-2xl bg-slate-900/70 border border-slate-700/40 p-6"
+        >
+          <div className="flex items-center gap-2 mb-5">
+            <TrendingUp className="w-4 h-4 text-indigo-400" />
             <h2 className="text-white font-semibold">Queries Over Time</h2>
-            <div className="flex items-center gap-2 text-slate-400 text-xs">
-              <TrendingUp className="w-3 h-3 text-indigo-400" /> Last 30 days
-            </div>
+            <span className="ml-auto text-xs text-slate-500">Last 30 days</span>
           </div>
           <ResponsiveContainer width="100%" height={200}>
-            <AreaChart data={queryData}>
-              <defs>
-                <linearGradient id="queryGrad" x1="0" y1="0" x2="0" y2="1">
-                  <stop offset="5%" stopColor="#6366F1" stopOpacity={0.3} />
-                  <stop offset="95%" stopColor="#6366F1" stopOpacity={0} />
-                </linearGradient>
-              </defs>
-              <CartesianGrid strokeDasharray="3 3" stroke="#1E293B" />
-              <XAxis dataKey="day" tick={{ fill: '#64748B', fontSize: 11 }} tickLine={false} axisLine={false} interval={4} />
-              <YAxis tick={{ fill: '#64748B', fontSize: 11 }} tickLine={false} axisLine={false} />
-              <Tooltip contentStyle={{ background: '#1E293B', border: '1px solid #334155', borderRadius: '8px', color: '#F1F5F9' }} />
-              <Area type="monotone" dataKey="queries" stroke="#6366F1" fill="url(#queryGrad)" strokeWidth={2} />
-            </AreaChart>
+            <LineChart data={queriesOverTime} margin={{ top: 4, right: 4, left: -20, bottom: 0 }}>
+              <CartesianGrid strokeDasharray="3 3" stroke="#1e293b" />
+              <XAxis
+                dataKey="date"
+                tick={{ fill: '#64748b', fontSize: 11 }}
+                tickLine={false}
+                axisLine={false}
+                interval={6}
+              />
+              <YAxis tick={{ fill: '#64748b', fontSize: 11 }} tickLine={false} axisLine={false} allowDecimals={false} />
+              <Tooltip
+                contentStyle={{ background: '#0f172a', border: '1px solid #334155', borderRadius: 10, color: '#f1f5f9' }}
+                labelStyle={{ color: '#94a3b8' }}
+                cursor={{ stroke: '#6366f1', strokeWidth: 1 }}
+              />
+              <Line
+                type="monotone"
+                dataKey="count"
+                stroke="#6366f1"
+                strokeWidth={2}
+                dot={false}
+                activeDot={{ r: 5, fill: '#6366f1' }}
+              />
+            </LineChart>
           </ResponsiveContainer>
-        </div>
+        </motion.div>
 
-        {/* Docs by dept */}
-        <div className="p-5 rounded-xl border border-slate-800 bg-slate-900/50 backdrop-blur-sm">
-          <h2 className="text-white font-semibold mb-4">Documents by Department</h2>
-          <ResponsiveContainer width="100%" height={200}>
-            <BarChart data={deptData} layout="vertical">
-              <CartesianGrid strokeDasharray="3 3" stroke="#1E293B" horizontal={false} />
-              <XAxis type="number" tick={{ fill: '#64748B', fontSize: 11 }} tickLine={false} axisLine={false} />
-              <YAxis dataKey="dept" type="category" tick={{ fill: '#94A3B8', fontSize: 11 }} tickLine={false} axisLine={false} width={50} />
-              <Tooltip contentStyle={{ background: '#1E293B', border: '1px solid #334155', borderRadius: '8px', color: '#F1F5F9' }} />
-              <Bar dataKey="docs" fill="#6366F1" radius={[0, 4, 4, 0]} />
-            </BarChart>
-          </ResponsiveContainer>
-        </div>
+        {/* Docs by department */}
+        <motion.div
+          custom={5}
+          variants={fadeUp}
+          initial="hidden"
+          animate="show"
+          className="rounded-2xl bg-slate-900/70 border border-slate-700/40 p-6"
+        >
+          <div className="flex items-center gap-2 mb-5">
+            <FileText className="w-4 h-4 text-violet-400" />
+            <h2 className="text-white font-semibold">Documents by Department</h2>
+          </div>
+          {docsByDept.length === 0 ? (
+            <div className="flex items-center justify-center h-[200px] text-slate-500 text-sm">
+              No department data yet
+            </div>
+          ) : (
+            <ResponsiveContainer width="100%" height={200}>
+              <BarChart data={docsByDept} margin={{ top: 4, right: 4, left: -20, bottom: 0 }}>
+                <CartesianGrid strokeDasharray="3 3" stroke="#1e293b" />
+                <XAxis
+                  dataKey="dept"
+                  tick={{ fill: '#64748b', fontSize: 11 }}
+                  tickLine={false}
+                  axisLine={false}
+                />
+                <YAxis tick={{ fill: '#64748b', fontSize: 11 }} tickLine={false} axisLine={false} allowDecimals={false} />
+                <Tooltip
+                  contentStyle={{ background: '#0f172a', border: '1px solid #334155', borderRadius: 10, color: '#f1f5f9' }}
+                  labelStyle={{ color: '#94a3b8' }}
+                  cursor={{ fill: '#6366f110' }}
+                />
+                <Bar dataKey="count" fill="#7c3aed" radius={[6, 6, 0, 0]} />
+              </BarChart>
+            </ResponsiveContainer>
+          )}
+        </motion.div>
       </div>
 
-      {/* Cost + Activity Row */}
-      <div className="grid grid-cols-1 lg:grid-cols-3 gap-4">
-        {/* Cost tracking */}
-        <div className="p-5 rounded-xl border border-slate-800 bg-slate-900/50 backdrop-blur-sm">
-          <h2 className="text-white font-semibold mb-4 flex items-center gap-2">
-            <DollarSign className="w-4 h-4 text-amber-400" /> Monthly Costs
-          </h2>
-          <div className="space-y-3">
-            {[
-              { label: 'Embedding (OpenAI)', amount: '$12.40', pct: 24 },
-              { label: 'LLM (GPT-4o)', amount: '$38.90', pct: 76 },
-              { label: 'Storage (S3)', amount: '$3.20', pct: 6 },
-            ].map(c => (
-              <div key={c.label}>
-                <div className="flex justify-between text-sm mb-1">
-                  <span className="text-slate-400">{c.label}</span>
-                  <span className="text-white font-medium">{c.amount}</span>
-                </div>
-                <div className="h-1.5 bg-slate-800 rounded-full overflow-hidden">
-                  <div className="h-full bg-indigo-500 rounded-full" style={{ width: `${c.pct}%` }} />
-                </div>
-              </div>
-            ))}
-            <div className="pt-2 border-t border-slate-800 flex justify-between text-sm">
-              <span className="text-slate-400">Total this month</span>
-              <span className="text-white font-bold">$54.50 / $500</span>
-            </div>
+      {/* Bottom row */}
+      <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
+        {/* Recent activity */}
+        <motion.div
+          custom={6}
+          variants={fadeUp}
+          initial="hidden"
+          animate="show"
+          className="lg:col-span-2 rounded-2xl bg-slate-900/70 border border-slate-700/40 p-6"
+        >
+          <div className="flex items-center gap-2 mb-5">
+            <Search className="w-4 h-4 text-sky-400" />
+            <h2 className="text-white font-semibold">Recent Activity</h2>
           </div>
-        </div>
+          {recentActivity.length === 0 ? (
+            <p className="text-slate-500 text-sm">No queries yet. Start a conversation!</p>
+          ) : (
+            <ul className="space-y-3">
+              {recentActivity.map((q, i) => (
+                <motion.li
+                  key={q.id}
+                  custom={i}
+                  variants={fadeUp}
+                  initial="hidden"
+                  animate="show"
+                  className="flex items-start gap-3 p-3 rounded-xl bg-slate-800/50 border border-slate-700/30"
+                >
+                  <div className="w-8 h-8 rounded-lg bg-sky-500/10 border border-sky-500/20 flex items-center justify-center flex-shrink-0 mt-0.5">
+                    <Search className="w-3.5 h-3.5 text-sky-400" />
+                  </div>
+                  <div className="min-w-0 flex-1">
+                    <p className="text-slate-200 text-sm font-medium truncate">{q.query}</p>
+                    <p className="text-slate-500 text-xs mt-0.5">{relativeTime(q.timestamp)}</p>
+                  </div>
+                </motion.li>
+              ))}
+            </ul>
+          )}
+        </motion.div>
 
-        {/* Recent Activity */}
-        <div className="lg:col-span-2 p-5 rounded-xl border border-slate-800 bg-slate-900/50 backdrop-blur-sm">
-          <h2 className="text-white font-semibold mb-4 flex items-center gap-2">
-            <Clock className="w-4 h-4 text-slate-400" /> Recent Activity
-          </h2>
-          <div className="space-y-3">
-            {recentActivity.map((a, i) => (
-              <div key={i} className="flex items-center gap-3 p-3 rounded-lg bg-slate-800/50 hover:bg-slate-800 transition-colors">
-                <div className="w-7 h-7 rounded-full bg-indigo-500/20 text-indigo-400 flex items-center justify-center text-xs font-bold flex-shrink-0">
-                  {a.user[0]}
-                </div>
-                <div className="flex-1 min-w-0">
-                  <div className="text-sm text-white truncate">{a.query}</div>
-                  <div className="text-xs text-slate-500 mt-0.5">{a.user}</div>
-                </div>
-                <div className="flex items-center gap-3 flex-shrink-0 text-xs">
-                  <span className="text-slate-400">{a.latency}</span>
-                  <span className="text-slate-600">{a.time}</span>
-                </div>
-              </div>
-            ))}
+        {/* Monthly costs */}
+        <motion.div
+          custom={7}
+          variants={fadeUp}
+          initial="hidden"
+          animate="show"
+          className="rounded-2xl bg-slate-900/70 border border-slate-700/40 p-6"
+        >
+          <div className="flex items-center gap-2 mb-5">
+            <Zap className="w-4 h-4 text-emerald-400" />
+            <h2 className="text-white font-semibold">Monthly Costs</h2>
           </div>
-        </div>
+          <div className="space-y-4">
+            <div className="flex justify-between items-center py-2 border-b border-slate-800">
+              <span className="text-slate-400 text-sm">LLM (queries)</span>
+              <span className="text-white font-mono text-sm">${llmCost}</span>
+            </div>
+            <div className="flex justify-between items-center py-2 border-b border-slate-800">
+              <span className="text-slate-400 text-sm">Embeddings (docs)</span>
+              <span className="text-white font-mono text-sm">${embeddingCost}</span>
+            </div>
+            <div className="flex justify-between items-center py-3 rounded-xl bg-emerald-500/10 px-3 border border-emerald-500/20">
+              <span className="text-emerald-300 text-sm font-semibold">Estimated Total</span>
+              <span className="text-emerald-300 font-mono font-bold">${totalCost}</span>
+            </div>
+            <p className="text-slate-600 text-xs leading-relaxed">
+              Estimate: $0.004/query · $0.002/doc. Actual costs depend on model and usage.
+            </p>
+          </div>
+        </motion.div>
       </div>
     </div>
   )

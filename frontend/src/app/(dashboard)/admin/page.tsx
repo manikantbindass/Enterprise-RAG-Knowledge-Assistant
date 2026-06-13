@@ -1,322 +1,523 @@
 'use client'
-
 import { useState } from 'react'
 import { motion } from 'framer-motion'
-import { Users, Shield, Activity, DollarSign, Trash2, UserCheck, UserX, Search, Plus } from 'lucide-react'
+import { Users, Shield, Activity, Plus, Search, Trash2, CheckCircle, AlertCircle, Clock, BarChart3 } from 'lucide-react'
+import { useAppStore, relativeTime, isToday, AppUser } from '@/lib/store'
 
-const mockUsers = [
-  { id: 1, name: 'Sarah Kim', email: 'sarah@acme.com', role: 'admin', dept: 'Legal', status: 'active', joined: '3 months ago', queries: 1240 },
-  { id: 2, name: 'John Doe', email: 'john@acme.com', role: 'user', dept: 'Finance', status: 'active', joined: '1 month ago', queries: 890 },
-  { id: 3, name: 'Mike Ross', email: 'mike@acme.com', role: 'user', dept: 'IT', status: 'active', joined: '2 months ago', queries: 654 },
-  { id: 4, name: 'Emma Li', email: 'emma@acme.com', role: 'manager', dept: 'HR', status: 'active', joined: '5 months ago', queries: 432 },
-  { id: 5, name: 'Alex T.', email: 'alex@acme.com', role: 'user', dept: 'Sales', status: 'inactive', joined: '2 weeks ago', queries: 21 },
-  { id: 6, name: 'Nina Patel', email: 'nina@acme.com', role: 'user', dept: 'Product', status: 'active', joined: '1 week ago', queries: 87 },
-]
+const fadeUp = {
+  hidden: { opacity: 0, y: 24 },
+  visible: (i: number) => ({ opacity: 1, y: 0, transition: { delay: i * 0.08, duration: 0.45, ease: 'easeOut' } }),
+}
 
-const roleBadge: Record<string, string> = {
-  admin:   'bg-indigo-400/10 text-indigo-400 border-indigo-400/20',
-  manager: 'bg-violet-400/10 text-violet-400 border-violet-400/20',
-  user:    'bg-slate-400/10 text-slate-400 border-slate-400/20',
+function initials(name: string) {
+  return name.split(' ').map(w => w[0]).join('').toUpperCase().slice(0, 2)
+}
+
+function RoleBadge({ role }: { role: string }) {
+  const colors: Record<string, string> = {
+    admin: 'bg-indigo-500/20 text-indigo-300 border border-indigo-500/40',
+    manager: 'bg-purple-500/20 text-purple-300 border border-purple-500/40',
+    user: 'bg-slate-500/20 text-slate-300 border border-slate-500/40',
+  }
+  return (
+    <span className={`px-2 py-0.5 rounded-full text-xs font-semibold ${colors[role] ?? colors.user}`}>
+      {role}
+    </span>
+  )
+}
+
+interface InviteForm {
+  name: string
+  email: string
+  role: 'user' | 'manager' | 'admin'
+  department: string
 }
 
 export default function AdminPage() {
-  const [users, setUsers] = useState(mockUsers)
+  const { state, dispatch } = useAppStore()
+  const [activeTab, setActiveTab] = useState<'users' | 'security' | 'analytics'>('users')
   const [search, setSearch] = useState('')
-  const [activeSection, setActiveSection] = useState('users')
   const [showInvite, setShowInvite] = useState(false)
-  const [inviteForm, setInviteForm] = useState({ name: '', email: '', role: 'user', dept: '' })
-  const [inviteSent, setInviteSent] = useState(false)
+  const [form, setForm] = useState<InviteForm>({ name: '', email: '', role: 'user', department: '' })
+  const [formError, setFormError] = useState('')
 
-  const handleInvite = (e: React.FormEvent) => {
-    e.preventDefault()
-    const newUser = {
-      id: Date.now(),
-      name: inviteForm.name,
-      email: inviteForm.email,
-      role: inviteForm.role,
-      dept: inviteForm.dept || 'General',
-      status: 'active' as const,
-      joined: 'Just now',
-      queries: 0,
+  // Current logged-in user from localStorage
+  const currentUserRaw = typeof window !== 'undefined' ? localStorage.getItem('rag_user') : null
+  const currentUser: AppUser | null = currentUserRaw ? JSON.parse(currentUserRaw) : null
+
+  // Users list: always include current user at top, then store users
+  const storeUsers: AppUser[] = state.users ?? []
+  const allUsers: AppUser[] = currentUser
+    ? [currentUser, ...storeUsers.filter(u => u.id !== currentUser.id)]
+    : storeUsers
+
+  const filtered = allUsers.filter(u => {
+    const q = search.toLowerCase()
+    return (
+      u.name.toLowerCase().includes(q) ||
+      u.email.toLowerCase().includes(q) ||
+      (u.department ?? '').toLowerCase().includes(q)
+    )
+  })
+
+  function handleInvite() {
+    if (!form.name.trim()) { setFormError('Name is required.'); return }
+    if (!form.email.trim()) { setFormError('Email is required.'); return }
+    setFormError('')
+    const newUser: AppUser = {
+      id: `user_${Date.now()}`,
+      name: form.name.trim(),
+      email: form.email.trim(),
+      role: form.role,
+      department: form.department.trim() || undefined,
+      active: true,
+      queryCount: 0,
+      joinedAt: new Date().toISOString(),
     }
-    setUsers(prev => [newUser, ...prev])
-    setInviteSent(true)
-    setTimeout(() => {
-      setShowInvite(false)
-      setInviteSent(false)
-      setInviteForm({ name: '', email: '', role: 'user', dept: '' })
-    }, 1500)
+    dispatch({ type: 'ADD_USER', payload: newUser })
+    setForm({ name: '', email: '', role: 'user', department: '' })
+    setShowInvite(false)
   }
 
-  const sections = [
-    { id: 'users', label: 'User Management', icon: Users },
-    { id: 'security', label: 'Security & Access', icon: Shield },
-    { id: 'usage', label: 'Usage & Costs', icon: Activity },
-  ]
-
-  const filtered = users.filter(u =>
-    u.name.toLowerCase().includes(search.toLowerCase()) ||
-    u.email.toLowerCase().includes(search.toLowerCase()) ||
-    u.dept.toLowerCase().includes(search.toLowerCase())
-  )
-
-  const toggleStatus = (id: number) => {
-    setUsers(prev => prev.map(u => u.id === id ? { ...u, status: u.status === 'active' ? 'inactive' : 'active' } : u))
+  function toggleActive(id: string) {
+    dispatch({ type: 'TOGGLE_USER_ACTIVE', payload: { id } })
   }
 
-  const deleteUser = (id: number) => {
-    setUsers(prev => prev.filter(u => u.id !== id))
+  function deleteUser(id: string) {
+    dispatch({ type: 'DELETE_USER', payload: { id } })
   }
+
+  // Analytics
+  const logs = state.queryLogs ?? []
+  const documents = state.documents ?? []
+  const totalQueries = logs.length
+  const queriesToday = logs.filter(q => isToday(q.timestamp)).length
+  const indexedDocs = documents.filter((d: any) => d.status === 'indexed').length
+  const avgResponse =
+    logs.length > 0
+      ? Math.round(logs.reduce((s: number, q: any) => s + (q.responseMs ?? 0), 0) / logs.length)
+      : 0
+
+  // Top 5 topics by first word of query
+  const topicMap: Record<string, number> = {}
+  logs.forEach((q: any) => {
+    const word = (q.query ?? '').trim().split(/\s+/)[0]?.toLowerCase()
+    if (word) topicMap[word] = (topicMap[word] ?? 0) + 1
+  })
+  const topTopics = Object.entries(topicMap)
+    .sort((a, b) => b[1] - a[1])
+    .slice(0, 5)
+
+  // Leaderboard
+  const leaderboard = [...allUsers].sort((a, b) => (b.queryCount ?? 0) - (a.queryCount ?? 0))
+
+  const tabs = [
+    { id: 'users', label: 'Users', icon: Users },
+    { id: 'security', label: 'Security', icon: Shield },
+    { id: 'analytics', label: 'Usage Analytics', icon: Activity },
+  ] as const
 
   return (
-    <>
-    <div className="space-y-6">
-      <div className="flex items-center justify-between">
-        <div>
-          <h1 className="text-2xl font-bold text-white">Admin Panel</h1>
-          <p className="text-slate-400 text-sm mt-1">Manage users, security, and workspace settings</p>
-        </div>
-        <div className="flex items-center gap-2 px-3 py-1.5 rounded-lg bg-indigo-500/10 border border-indigo-500/20">
-          <Shield className="w-4 h-4 text-indigo-400" />
-          <span className="text-xs text-indigo-400 font-medium">Administrator</span>
-        </div>
-      </div>
+    <div className="min-h-screen bg-[#0a0c14] text-white p-6 md:p-10">
+      <motion.div initial="hidden" animate="visible" variants={fadeUp} custom={0}>
+        <h1 className="text-3xl font-bold text-white mb-1">Admin Panel</h1>
+        <p className="text-slate-400 text-sm mb-8">Manage users, security controls, and system analytics.</p>
+      </motion.div>
 
-      {/* Section Tabs */}
-      <div className="flex gap-2">
-        {sections.map(s => (
-          <button key={s.id} onClick={() => setActiveSection(s.id)}
-            className={`flex items-center gap-2 px-4 py-2 rounded-xl text-sm font-medium transition-all ${
-              activeSection === s.id
-                ? 'bg-indigo-500/15 text-indigo-400 border border-indigo-500/20'
-                : 'text-slate-400 hover:text-white bg-slate-800/40 border border-slate-800'
-            }`}>
-            <s.icon className="w-4 h-4" />
-            {s.label}
+      {/* Tab Bar */}
+      <motion.div initial="hidden" animate="visible" variants={fadeUp} custom={1}
+        className="flex gap-2 mb-8 border-b border-white/10 pb-0">
+        {tabs.map(tab => (
+          <button
+            key={tab.id}
+            onClick={() => setActiveTab(tab.id)}
+            className={`flex items-center gap-2 px-5 py-2.5 rounded-t-lg text-sm font-semibold transition-all duration-200
+              ${activeTab === tab.id
+                ? 'bg-indigo-600 text-white shadow-lg shadow-indigo-900/40'
+                : 'text-slate-400 hover:text-white hover:bg-white/5'}`}
+          >
+            <tab.icon size={15} />
+            {tab.label}
           </button>
         ))}
-      </div>
+      </motion.div>
 
-      {/* User Management */}
-      {activeSection === 'users' && (
-        <motion.div initial={{ opacity: 0 }} animate={{ opacity: 1 }} className="space-y-4">
-          {/* Stats */}
-          <div className="grid grid-cols-4 gap-4">
-            {[
-              { label: 'Total Users', value: users.length, color: 'text-white' },
-              { label: 'Active', value: users.filter(u => u.status === 'active').length, color: 'text-emerald-400' },
-              { label: 'Admins', value: users.filter(u => u.role === 'admin').length, color: 'text-indigo-400' },
-              { label: 'Inactive', value: users.filter(u => u.status === 'inactive').length, color: 'text-slate-400' },
-            ].map(s => (
-              <div key={s.label} className="p-4 rounded-xl border border-slate-800 bg-slate-900/50">
-                <div className={`text-2xl font-bold ${s.color}`}>{s.value}</div>
-                <div className="text-xs text-slate-500 mt-1">{s.label}</div>
-              </div>
-            ))}
-          </div>
-
-          {/* Search + Invite */}
-          <div className="flex gap-3">
-            <div className="flex-1 relative">
-              <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-slate-500" />
-              <input type="text" placeholder="Search users…" value={search} onChange={e => setSearch(e.target.value)}
-                className="w-full pl-10 pr-4 py-2.5 rounded-xl bg-slate-800/60 border border-slate-700 text-white placeholder-slate-500 focus:outline-none focus:ring-2 focus:ring-indigo-500 text-sm" />
+      {/* ───────── USERS ───────── */}
+      {activeTab === 'users' && (
+        <motion.div initial="hidden" animate="visible" variants={fadeUp} custom={2}>
+          {/* Toolbar */}
+          <div className="flex flex-col sm:flex-row gap-3 mb-6">
+            <div className="relative flex-1">
+              <Search size={15} className="absolute left-3 top-1/2 -translate-y-1/2 text-slate-500" />
+              <input
+                value={search}
+                onChange={e => setSearch(e.target.value)}
+                placeholder="Search by name, email, or department…"
+                className="w-full pl-9 pr-4 py-2.5 rounded-xl bg-white/5 border border-white/10 text-sm text-white
+                           placeholder:text-slate-500 focus:outline-none focus:border-indigo-500 focus:ring-1 focus:ring-indigo-500/40 transition"
+              />
             </div>
-            <button onClick={() => setShowInvite(true)} className="px-4 py-2.5 rounded-xl bg-indigo-600 hover:bg-indigo-500 text-white text-sm font-medium transition-all flex items-center gap-2">
-              <Plus className="w-4 h-4" /> Invite User
+            <button
+              onClick={() => setShowInvite(true)}
+              className="flex items-center gap-2 px-4 py-2.5 rounded-xl bg-indigo-600 hover:bg-indigo-500
+                         text-sm font-semibold text-white transition-all duration-200 shadow-lg shadow-indigo-900/40 whitespace-nowrap"
+            >
+              <Plus size={15} /> Invite User
             </button>
           </div>
 
-          {/* Users Table */}
-          <div className="rounded-xl border border-slate-800 bg-slate-900/50 overflow-hidden">
-            <div className="grid grid-cols-12 gap-4 px-5 py-3 border-b border-slate-800 text-xs font-medium text-slate-500 uppercase tracking-wide">
-              <div className="col-span-3">User</div>
-              <div className="col-span-2">Department</div>
-              <div className="col-span-2">Role</div>
-              <div className="col-span-2">Status</div>
-              <div className="col-span-1">Queries</div>
-              <div className="col-span-1">Joined</div>
-              <div className="col-span-1"></div>
+          {/* User List */}
+          {filtered.length === 0 ? (
+            <div className="flex flex-col items-center justify-center py-20 text-slate-500">
+              <Users size={40} className="mb-4 opacity-30" />
+              <p className="text-base">No users in the system. Invite your first team member.</p>
             </div>
-            <div className="divide-y divide-slate-800">
-              {filtered.map((user, i) => (
-                <motion.div key={user.id}
-                  initial={{ opacity: 0 }}
-                  animate={{ opacity: 1 }}
-                  transition={{ delay: i * 0.03 }}
-                  className="grid grid-cols-12 gap-4 px-5 py-4 items-center hover:bg-slate-800/30 transition-colors group"
-                >
-                  <div className="col-span-3 flex items-center gap-3 min-w-0">
-                    <div className="w-8 h-8 rounded-full bg-gradient-to-br from-indigo-500 to-violet-500 flex items-center justify-center text-white text-xs font-bold flex-shrink-0">
-                      {user.name[0]}
-                    </div>
-                    <div className="min-w-0">
-                      <div className="text-sm text-white font-medium truncate">{user.name}</div>
-                      <div className="text-xs text-slate-500 truncate">{user.email}</div>
-                    </div>
-                  </div>
-                  <div className="col-span-2 text-sm text-slate-400">{user.dept}</div>
-                  <div className="col-span-2">
-                    <span className={`inline-flex px-2.5 py-1 rounded-full text-xs font-medium border ${roleBadge[user.role]}`}>
-                      {user.role}
-                    </span>
-                  </div>
-                  <div className="col-span-2">
-                    <span className={`inline-flex items-center gap-1.5 text-xs font-medium ${user.status === 'active' ? 'text-emerald-400' : 'text-slate-500'}`}>
-                      <span className={`w-1.5 h-1.5 rounded-full ${user.status === 'active' ? 'bg-emerald-400' : 'bg-slate-600'}`} />
-                      {user.status}
-                    </span>
-                  </div>
-                  <div className="col-span-1 text-sm text-slate-400">{user.queries.toLocaleString()}</div>
-                  <div className="col-span-1 text-xs text-slate-500">{user.joined}</div>
-                  <div className="col-span-1 flex items-center gap-1 opacity-0 group-hover:opacity-100 transition-opacity">
-                    <button onClick={() => toggleStatus(user.id)} title={user.status === 'active' ? 'Deactivate' : 'Activate'}
-                      className="p-1 text-slate-400 hover:text-amber-400 transition-colors">
-                      {user.status === 'active' ? <UserX className="w-3.5 h-3.5" /> : <UserCheck className="w-3.5 h-3.5" />}
-                    </button>
-                    <button onClick={() => deleteUser(user.id)} title="Remove user"
-                      className="p-1 text-slate-400 hover:text-red-400 transition-colors">
-                      <Trash2 className="w-3.5 h-3.5" />
-                    </button>
-                  </div>
-                </motion.div>
-              ))}
+          ) : (
+            <div className="rounded-2xl border border-white/10 overflow-hidden bg-white/[0.03]">
+              <table className="w-full text-sm">
+                <thead>
+                  <tr className="border-b border-white/10 text-slate-400 text-xs uppercase tracking-wider">
+                    <th className="px-5 py-3 text-left font-semibold">User</th>
+                    <th className="px-5 py-3 text-left font-semibold hidden md:table-cell">Role</th>
+                    <th className="px-5 py-3 text-left font-semibold hidden lg:table-cell">Department</th>
+                    <th className="px-5 py-3 text-left font-semibold hidden lg:table-cell">Queries</th>
+                    <th className="px-5 py-3 text-left font-semibold hidden xl:table-cell">Joined</th>
+                    <th className="px-5 py-3 text-center font-semibold">Status</th>
+                    <th className="px-5 py-3 text-center font-semibold">Actions</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {filtered.map((user, i) => (
+                    <motion.tr
+                      key={user.id}
+                      initial={{ opacity: 0, y: 8 }}
+                      animate={{ opacity: 1, y: 0 }}
+                      transition={{ delay: i * 0.04 }}
+                      className="border-b border-white/5 hover:bg-white/[0.04] transition-colors"
+                    >
+                      {/* Avatar + name + email */}
+                      <td className="px-5 py-3">
+                        <div className="flex items-center gap-3">
+                          <div className="w-9 h-9 rounded-full bg-indigo-600/30 border border-indigo-500/40
+                                          flex items-center justify-center text-indigo-300 font-bold text-xs flex-shrink-0">
+                            {initials(user.name)}
+                          </div>
+                          <div>
+                            <p className="font-semibold text-white leading-tight">
+                              {user.name}
+                              {currentUser && user.id === currentUser.id && (
+                                <span className="ml-2 text-xs text-indigo-400 font-normal">(you)</span>
+                              )}
+                            </p>
+                            <p className="text-slate-400 text-xs">{user.email}</p>
+                          </div>
+                        </div>
+                      </td>
+                      <td className="px-5 py-3 hidden md:table-cell">
+                        <RoleBadge role={user.role} />
+                      </td>
+                      <td className="px-5 py-3 text-slate-300 hidden lg:table-cell">
+                        {user.department ?? <span className="text-slate-600">—</span>}
+                      </td>
+                      <td className="px-5 py-3 text-slate-300 hidden lg:table-cell">
+                        {user.queryCount ?? 0}
+                      </td>
+                      <td className="px-5 py-3 text-slate-400 text-xs hidden xl:table-cell">
+                        {user.joinedAt ? relativeTime(user.joinedAt) : '—'}
+                      </td>
+                      <td className="px-5 py-3 text-center">
+                        <button
+                          onClick={() => toggleActive(user.id)}
+                          className={`px-3 py-1 rounded-full text-xs font-semibold border transition-all duration-200
+                            ${user.active !== false
+                              ? 'bg-green-500/15 text-green-400 border-green-500/30 hover:bg-green-500/25'
+                              : 'bg-slate-700/40 text-slate-500 border-slate-600/40 hover:bg-slate-700/60'}`}
+                        >
+                          {user.active !== false ? 'Active' : 'Inactive'}
+                        </button>
+                      </td>
+                      <td className="px-5 py-3 text-center">
+                        <button
+                          onClick={() => deleteUser(user.id)}
+                          disabled={currentUser?.id === user.id}
+                          title={currentUser?.id === user.id ? "Can't delete yourself" : 'Delete user'}
+                          className="p-1.5 rounded-lg text-slate-500 hover:text-red-400 hover:bg-red-500/10
+                                     disabled:opacity-25 disabled:cursor-not-allowed transition-all duration-200"
+                        >
+                          <Trash2 size={14} />
+                        </button>
+                      </td>
+                    </motion.tr>
+                  ))}
+                </tbody>
+              </table>
             </div>
-          </div>
+          )}
         </motion.div>
       )}
 
-      {/* Security & Access */}
-      {activeSection === 'security' && (
-        <motion.div initial={{ opacity: 0 }} animate={{ opacity: 1 }} className="space-y-4">
+      {/* ───────── SECURITY ───────── */}
+      {activeTab === 'security' && (
+        <motion.div initial="hidden" animate="visible" variants={fadeUp} custom={2}
+          className="grid gap-4 max-w-2xl">
+          <h2 className="text-lg font-bold text-white flex items-center gap-2 mb-2">
+            <Shield size={18} className="text-indigo-400" /> Security Controls
+          </h2>
           {[
-            { title: 'SSO / SAML', desc: 'Configure single sign-on with your identity provider', status: 'Configured', color: 'emerald' },
-            { title: 'RBAC Policies', desc: 'Role-based access control rules for documents and queries', status: 'Active', color: 'emerald' },
-            { title: 'IP Allowlist', desc: 'Restrict access to specific IP ranges', status: 'Disabled', color: 'slate' },
-            { title: 'Audit Logging', desc: 'Full audit trail of all user actions and queries', status: 'Active', color: 'emerald' },
-            { title: 'PII Masking', desc: 'Automatically redact PII in query results', status: 'Active', color: 'emerald' },
-            { title: 'Prompt Injection Defense', desc: 'Block malicious prompt injection attempts', status: 'Active', color: 'emerald' },
-          ].map(item => (
-            <div key={item.title} className="flex items-center justify-between p-4 rounded-xl border border-slate-800 bg-slate-900/50">
-              <div>
-                <div className="text-sm font-medium text-white">{item.title}</div>
-                <div className="text-xs text-slate-500 mt-0.5">{item.desc}</div>
-              </div>
+            {
+              label: 'Auth Protection',
+              desc: 'Middleware protects all routes',
+              status: 'active' as const,
+            },
+            {
+              label: 'Session Cookies',
+              desc: 'HttpOnly secure session cookies',
+              status: 'active' as const,
+            },
+            {
+              label: 'RBAC',
+              desc: 'Role-based access control enforced',
+              status: 'active' as const,
+            },
+            {
+              label: 'Audit Logging',
+              desc: `${logs.length} quer${logs.length === 1 ? 'y' : 'ies'} logged`,
+              status: 'active' as const,
+            },
+            {
+              label: 'API Rate Limiting',
+              desc: 'Requires backend',
+              status: 'backend' as const,
+            },
+            {
+              label: 'PII Masking',
+              desc: 'Requires backend',
+              status: 'backend' as const,
+            },
+            {
+              label: 'Prompt Injection Defense',
+              desc: 'Requires backend',
+              status: 'backend' as const,
+            },
+          ].map((ctrl, i) => (
+            <motion.div
+              key={ctrl.label}
+              initial={{ opacity: 0, x: -16 }}
+              animate={{ opacity: 1, x: 0 }}
+              transition={{ delay: i * 0.06 }}
+              className="flex items-center justify-between px-5 py-4 rounded-xl bg-white/[0.04]
+                         border border-white/10 hover:border-white/20 transition-all duration-200"
+            >
               <div className="flex items-center gap-3">
-                <span className={`text-xs font-medium ${item.color === 'emerald' ? 'text-emerald-400' : 'text-slate-500'}`}>
-                  {item.status}
-                </span>
-                <button className="px-3 py-1.5 rounded-lg bg-slate-800 border border-slate-700 text-slate-300 hover:text-white text-xs transition-all">
-                  Configure
-                </button>
+                {ctrl.status === 'active' ? (
+                  <CheckCircle size={18} className="text-green-400 flex-shrink-0" />
+                ) : (
+                  <Clock size={18} className="text-amber-400 flex-shrink-0" />
+                )}
+                <div>
+                  <p className="font-semibold text-white text-sm">{ctrl.label}</p>
+                  <p className="text-slate-400 text-xs">{ctrl.desc}</p>
+                </div>
               </div>
-            </div>
+              {ctrl.status === 'active' ? (
+                <span className="px-3 py-1 rounded-full text-xs font-semibold
+                                 bg-green-500/15 text-green-400 border border-green-500/30">
+                  Active
+                </span>
+              ) : (
+                <span className="px-3 py-1 rounded-full text-xs font-semibold
+                                 bg-amber-500/15 text-amber-400 border border-amber-500/30">
+                  Requires backend
+                </span>
+              )}
+            </motion.div>
           ))}
         </motion.div>
       )}
 
-      {/* Usage & Costs */}
-      {activeSection === 'usage' && (
-        <motion.div initial={{ opacity: 0 }} animate={{ opacity: 1 }} className="space-y-4">
-          <div className="grid grid-cols-3 gap-4">
+      {/* ───────── USAGE ANALYTICS ───────── */}
+      {activeTab === 'analytics' && (
+        <motion.div initial="hidden" animate="visible" variants={fadeUp} custom={2} className="space-y-8">
+          {/* KPI Cards */}
+          <div className="grid grid-cols-2 lg:grid-cols-4 gap-4">
             {[
-              { label: 'MTD Spend', value: '$54.50', sub: 'of $500 budget', icon: DollarSign, color: 'text-amber-400' },
-              { label: 'Total Queries', value: '48,291', sub: 'this month', icon: Activity, color: 'text-indigo-400' },
-              { label: 'Avg Latency', value: '1.4s', sub: 'p95: 2.8s', icon: Activity, color: 'text-emerald-400' },
-            ].map(m => (
-              <div key={m.label} className="p-5 rounded-xl border border-slate-800 bg-slate-900/50">
-                <m.icon className={`w-5 h-5 ${m.color} mb-3`} />
-                <div className="text-2xl font-bold text-white">{m.value}</div>
-                <div className="text-xs text-slate-500 mt-1">{m.label}</div>
-                <div className="text-xs text-slate-600 mt-0.5">{m.sub}</div>
-              </div>
+              { label: 'Total Queries', value: totalQueries, icon: BarChart3, color: 'indigo' },
+              { label: 'Queries Today', value: queriesToday, icon: Activity, color: 'purple' },
+              { label: 'Docs in KB', value: indexedDocs, icon: Shield, color: 'sky' },
+              { label: 'Avg Response', value: `${avgResponse} ms`, icon: Clock, color: 'emerald' },
+            ].map((kpi, i) => (
+              <motion.div
+                key={kpi.label}
+                initial={{ opacity: 0, scale: 0.95 }}
+                animate={{ opacity: 1, scale: 1 }}
+                transition={{ delay: i * 0.07 }}
+                className="rounded-2xl bg-white/[0.04] border border-white/10 p-5
+                           hover:border-indigo-500/40 hover:bg-white/[0.07] transition-all duration-300"
+              >
+                <p className="text-slate-400 text-xs mb-3">{kpi.label}</p>
+                <p className="text-3xl font-bold text-white">{kpi.value}</p>
+              </motion.div>
             ))}
           </div>
-          <div className="p-5 rounded-xl border border-slate-800 bg-slate-900/50">
-            <div className="text-sm font-medium text-white mb-4">Cost breakdown by service</div>
-            <div className="space-y-3">
-              {[
-                { label: 'LLM (GPT-4o)', amount: '$38.90', pct: 71 },
-                { label: 'Embeddings (OpenAI)', amount: '$12.40', pct: 23 },
-                { label: 'Storage (MinIO/S3)', amount: '$3.20', pct: 6 },
-              ].map(c => (
-                <div key={c.label}>
-                  <div className="flex justify-between text-sm mb-1.5">
-                    <span className="text-slate-400">{c.label}</span>
-                    <span className="text-white font-medium">{c.amount}</span>
-                  </div>
-                  <div className="h-2 bg-slate-800 rounded-full overflow-hidden">
-                    <div className="h-full bg-indigo-500 rounded-full" style={{ width: `${c.pct}%` }} />
-                  </div>
+
+          <div className="grid lg:grid-cols-2 gap-6">
+            {/* Top Topics */}
+            <div className="rounded-2xl bg-white/[0.03] border border-white/10 p-6">
+              <h3 className="text-sm font-bold text-slate-300 mb-4 flex items-center gap-2">
+                <BarChart3 size={14} className="text-indigo-400" /> Top 5 Topics
+              </h3>
+              {topTopics.length === 0 ? (
+                <p className="text-slate-500 text-sm py-6 text-center">No queries yet.</p>
+              ) : (
+                <div className="space-y-3">
+                  {topTopics.map(([topic, count], i) => {
+                    const max = topTopics[0][1]
+                    const pct = Math.round((count / max) * 100)
+                    return (
+                      <div key={topic}>
+                        <div className="flex justify-between text-xs mb-1">
+                          <span className="text-slate-300 capitalize font-medium">{topic}</span>
+                          <span className="text-slate-500">{count} queries</span>
+                        </div>
+                        <div className="h-1.5 rounded-full bg-white/5 overflow-hidden">
+                          <motion.div
+                            initial={{ width: 0 }}
+                            animate={{ width: `${pct}%` }}
+                            transition={{ delay: i * 0.1, duration: 0.6, ease: 'easeOut' }}
+                            className="h-full rounded-full bg-gradient-to-r from-indigo-500 to-purple-500"
+                          />
+                        </div>
+                      </div>
+                    )
+                  })}
                 </div>
-              ))}
+              )}
+            </div>
+
+            {/* Leaderboard */}
+            <div className="rounded-2xl bg-white/[0.03] border border-white/10 p-6">
+              <h3 className="text-sm font-bold text-slate-300 mb-4 flex items-center gap-2">
+                <Users size={14} className="text-indigo-400" /> User Query Leaderboard
+              </h3>
+              {leaderboard.length === 0 ? (
+                <p className="text-slate-500 text-sm py-6 text-center">No users yet.</p>
+              ) : (
+                <div className="space-y-3">
+                  {leaderboard.slice(0, 8).map((user, i) => (
+                    <div key={user.id} className="flex items-center gap-3">
+                      <span className={`w-5 text-xs font-bold text-center ${
+                        i === 0 ? 'text-yellow-400' : i === 1 ? 'text-slate-300' : i === 2 ? 'text-orange-400' : 'text-slate-600'
+                      }`}>
+                        {i + 1}
+                      </span>
+                      <div className="w-7 h-7 rounded-full bg-indigo-600/30 border border-indigo-500/30
+                                      flex items-center justify-center text-indigo-300 font-bold text-xs flex-shrink-0">
+                        {initials(user.name)}
+                      </div>
+                      <div className="flex-1 min-w-0">
+                        <p className="text-white text-xs font-semibold truncate">{user.name}</p>
+                        <p className="text-slate-500 text-xs truncate">{user.email}</p>
+                      </div>
+                      <span className="text-indigo-300 text-xs font-semibold">
+                        {user.queryCount ?? 0}
+                      </span>
+                    </div>
+                  ))}
+                </div>
+              )}
             </div>
           </div>
         </motion.div>
       )}
-    </div>
 
-      {/* Invite User Modal */}
+      {/* ───────── INVITE MODAL ───────── */}
       {showInvite && (
-        <div className="fixed inset-0 bg-black/60 backdrop-blur-sm z-50 flex items-center justify-center p-4">
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 backdrop-blur-sm"
+          onClick={e => { if (e.target === e.currentTarget) setShowInvite(false) }}>
           <motion.div
-            initial={{ opacity: 0, scale: 0.95 }}
-            animate={{ opacity: 1, scale: 1 }}
-            className="w-full max-w-md bg-slate-900 border border-slate-700 rounded-2xl p-6 shadow-2xl"
+            initial={{ opacity: 0, scale: 0.93, y: 20 }}
+            animate={{ opacity: 1, scale: 1, y: 0 }}
+            className="bg-[#12151f] border border-white/15 rounded-2xl p-7 w-full max-w-md shadow-2xl"
           >
-            <div className="flex items-center justify-between mb-5">
-              <h3 className="text-white font-semibold text-lg">Invite User</h3>
-              <button onClick={() => setShowInvite(false)} className="p-1 text-slate-400 hover:text-white transition-colors">
-                <svg className="w-5 h-5" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" /></svg>
+            <h2 className="text-lg font-bold text-white mb-5 flex items-center gap-2">
+              <Plus size={18} className="text-indigo-400" /> Invite Team Member
+            </h2>
+
+            <div className="space-y-4">
+              <div>
+                <label className="block text-xs text-slate-400 mb-1.5 font-medium">Full Name <span className="text-red-400">*</span></label>
+                <input
+                  value={form.name}
+                  onChange={e => setForm(f => ({ ...f, name: e.target.value }))}
+                  placeholder="Jane Smith"
+                  className="w-full px-4 py-2.5 rounded-xl bg-white/5 border border-white/10 text-sm text-white
+                             placeholder:text-slate-500 focus:outline-none focus:border-indigo-500 focus:ring-1
+                             focus:ring-indigo-500/40 transition"
+                />
+              </div>
+              <div>
+                <label className="block text-xs text-slate-400 mb-1.5 font-medium">Email <span className="text-red-400">*</span></label>
+                <input
+                  value={form.email}
+                  onChange={e => setForm(f => ({ ...f, email: e.target.value }))}
+                  placeholder="jane@company.com"
+                  type="email"
+                  className="w-full px-4 py-2.5 rounded-xl bg-white/5 border border-white/10 text-sm text-white
+                             placeholder:text-slate-500 focus:outline-none focus:border-indigo-500 focus:ring-1
+                             focus:ring-indigo-500/40 transition"
+                />
+              </div>
+              <div>
+                <label className="block text-xs text-slate-400 mb-1.5 font-medium">Role</label>
+                <select
+                  value={form.role}
+                  onChange={e => setForm(f => ({ ...f, role: e.target.value as InviteForm['role'] }))}
+                  className="w-full px-4 py-2.5 rounded-xl bg-[#0f1219] border border-white/10 text-sm text-white
+                             focus:outline-none focus:border-indigo-500 focus:ring-1 focus:ring-indigo-500/40 transition"
+                >
+                  <option value="user">User</option>
+                  <option value="manager">Manager</option>
+                  <option value="admin">Admin</option>
+                </select>
+              </div>
+              <div>
+                <label className="block text-xs text-slate-400 mb-1.5 font-medium">Department</label>
+                <input
+                  value={form.department}
+                  onChange={e => setForm(f => ({ ...f, department: e.target.value }))}
+                  placeholder="Engineering, HR, Finance…"
+                  className="w-full px-4 py-2.5 rounded-xl bg-white/5 border border-white/10 text-sm text-white
+                             placeholder:text-slate-500 focus:outline-none focus:border-indigo-500 focus:ring-1
+                             focus:ring-indigo-500/40 transition"
+                />
+              </div>
+
+              {formError && (
+                <div className="flex items-center gap-2 text-red-400 text-xs bg-red-500/10 px-3 py-2 rounded-lg border border-red-500/20">
+                  <AlertCircle size={13} /> {formError}
+                </div>
+              )}
+            </div>
+
+            <div className="flex gap-3 mt-6">
+              <button
+                onClick={() => { setShowInvite(false); setFormError('') }}
+                className="flex-1 px-4 py-2.5 rounded-xl bg-white/5 border border-white/10
+                           text-sm text-slate-300 hover:text-white hover:bg-white/10 transition"
+              >
+                Cancel
+              </button>
+              <button
+                onClick={handleInvite}
+                className="flex-1 px-4 py-2.5 rounded-xl bg-indigo-600 hover:bg-indigo-500
+                           text-sm font-semibold text-white transition shadow-lg shadow-indigo-900/40"
+              >
+                Send Invite
               </button>
             </div>
-            {inviteSent ? (
-              <div className="text-center py-6">
-                <div className="w-12 h-12 rounded-full bg-emerald-500/20 flex items-center justify-center mx-auto mb-3">
-                  <svg className="w-6 h-6 text-emerald-400" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M5 13l4 4L19 7" /></svg>
-                </div>
-                <p className="text-white font-medium">User added!</p>
-                <p className="text-slate-400 text-sm mt-1">{inviteForm.name} has been added to the team.</p>
-              </div>
-            ) : (
-              <form onSubmit={handleInvite} className="space-y-4">
-                <div>
-                  <label className="block text-sm font-medium text-slate-300 mb-1.5">Full name</label>
-                  <input value={inviteForm.name} onChange={e => setInviteForm(f => ({ ...f, name: e.target.value }))} required placeholder="Jane Smith"
-                    className="w-full px-4 py-2.5 rounded-xl bg-slate-800 border border-slate-700 text-white placeholder-slate-500 focus:outline-none focus:ring-2 focus:ring-indigo-500 text-sm" />
-                </div>
-                <div>
-                  <label className="block text-sm font-medium text-slate-300 mb-1.5">Work email</label>
-                  <input type="email" value={inviteForm.email} onChange={e => setInviteForm(f => ({ ...f, email: e.target.value }))} required placeholder="jane@company.com"
-                    className="w-full px-4 py-2.5 rounded-xl bg-slate-800 border border-slate-700 text-white placeholder-slate-500 focus:outline-none focus:ring-2 focus:ring-indigo-500 text-sm" />
-                </div>
-                <div className="grid grid-cols-2 gap-3">
-                  <div>
-                    <label className="block text-sm font-medium text-slate-300 mb-1.5">Role</label>
-                    <select value={inviteForm.role} onChange={e => setInviteForm(f => ({ ...f, role: e.target.value }))}
-                      className="w-full px-4 py-2.5 rounded-xl bg-slate-800 border border-slate-700 text-white focus:outline-none focus:ring-2 focus:ring-indigo-500 text-sm">
-                      <option value="user">User</option>
-                      <option value="manager">Manager</option>
-                      <option value="admin">Admin</option>
-                    </select>
-                  </div>
-                  <div>
-                    <label className="block text-sm font-medium text-slate-300 mb-1.5">Department</label>
-                    <input value={inviteForm.dept} onChange={e => setInviteForm(f => ({ ...f, dept: e.target.value }))} placeholder="e.g. Legal"
-                      className="w-full px-4 py-2.5 rounded-xl bg-slate-800 border border-slate-700 text-white placeholder-slate-500 focus:outline-none focus:ring-2 focus:ring-indigo-500 text-sm" />
-                  </div>
-                </div>
-                <div className="flex gap-3 pt-2">
-                  <button type="button" onClick={() => setShowInvite(false)}
-                    className="flex-1 py-2.5 rounded-xl bg-slate-800 border border-slate-700 text-slate-300 hover:text-white text-sm font-medium transition-all">Cancel</button>
-                  <button type="submit"
-                    className="flex-1 py-2.5 rounded-xl bg-indigo-600 hover:bg-indigo-500 text-white text-sm font-semibold transition-all">Add User</button>
-                </div>
-              </form>
-            )}
           </motion.div>
         </div>
       )}
-    </>
+    </div>
   )
 }
