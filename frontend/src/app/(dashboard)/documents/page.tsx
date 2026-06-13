@@ -1,6 +1,6 @@
 'use client'
 
-import { useState, useCallback } from 'react'
+import { useState, useCallback, useEffect } from 'react'
 import { motion } from 'framer-motion'
 import { Upload, FileText, File, Search, Filter, CheckCircle, Clock, AlertCircle, Trash2, Eye } from 'lucide-react'
 
@@ -26,6 +26,11 @@ export default function DocumentsPage() {
   const [docs, setDocs] = useState(mockDocs)
   const [statusFilter, setStatusFilter] = useState<string>('all')
   const [showFilter, setShowFilter] = useState(false)
+
+  // Persist docs to localStorage so Chat page can read them
+  useEffect(() => {
+    try { localStorage.setItem('rag_indexed_docs', JSON.stringify(docs)) } catch {}
+  }, [docs])
 
   const filtered = docs.filter(d => {
     const matchesSearch = d.name.toLowerCase().includes(search.toLowerCase()) ||
@@ -60,6 +65,7 @@ export default function DocumentsPage() {
         ))
       }, 3000 + Math.random() * 1000)
     })
+    // docs state update triggers the useEffect which saves to localStorage
   }, [])
 
   const handleDrop = (e: React.DragEvent) => {
