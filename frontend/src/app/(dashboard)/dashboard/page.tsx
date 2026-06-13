@@ -5,12 +5,39 @@ import { FileText, Search, MessageSquare, Users, TrendingUp, DollarSign, Clock, 
 import { AreaChart, Area, BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer } from 'recharts'
 import Link from 'next/link'
 
-// Mock data — replace with React Query hooks
-const queryData = Array.from({ length: 30 }, (_, i) => ({
-  day: `Day ${i + 1}`,
-  queries: Math.floor(Math.random() * 500 + 100),
-  cost: parseFloat((Math.random() * 5 + 1).toFixed(2)),
-}))
+// Stable mock data — seeded to avoid SSR hydration mismatch
+const queryData = [
+  { day: 'Day 1', queries: 312, cost: 3.24 },
+  { day: 'Day 2', queries: 480, cost: 4.91 },
+  { day: 'Day 3', queries: 195, cost: 2.13 },
+  { day: 'Day 4', queries: 540, cost: 5.62 },
+  { day: 'Day 5', queries: 420, cost: 4.33 },
+  { day: 'Day 6', queries: 267, cost: 2.78 },
+  { day: 'Day 7', queries: 380, cost: 3.95 },
+  { day: 'Day 8', queries: 510, cost: 5.28 },
+  { day: 'Day 9', queries: 145, cost: 1.52 },
+  { day: 'Day 10', queries: 490, cost: 5.09 },
+  { day: 'Day 11', queries: 320, cost: 3.33 },
+  { day: 'Day 12', queries: 560, cost: 5.82 },
+  { day: 'Day 13', queries: 230, cost: 2.41 },
+  { day: 'Day 14', queries: 410, cost: 4.27 },
+  { day: 'Day 15', queries: 595, cost: 6.18 },
+  { day: 'Day 16', queries: 275, cost: 2.87 },
+  { day: 'Day 17', queries: 440, cost: 4.58 },
+  { day: 'Day 18', queries: 155, cost: 1.63 },
+  { day: 'Day 19', queries: 520, cost: 5.41 },
+  { day: 'Day 20', queries: 348, cost: 3.62 },
+  { day: 'Day 21', queries: 478, cost: 4.97 },
+  { day: 'Day 22', queries: 210, cost: 2.19 },
+  { day: 'Day 23', queries: 395, cost: 4.11 },
+  { day: 'Day 24', queries: 580, cost: 6.03 },
+  { day: 'Day 25', queries: 120, cost: 1.26 },
+  { day: 'Day 26', queries: 445, cost: 4.63 },
+  { day: 'Day 27', queries: 310, cost: 3.22 },
+  { day: 'Day 28', queries: 498, cost: 5.17 },
+  { day: 'Day 29', queries: 265, cost: 2.76 },
+  { day: 'Day 30', queries: 532, cost: 5.53 },
+]
 
 const deptData = [
   { dept: 'Legal', docs: 1240 },

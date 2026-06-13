@@ -1,4 +1,4 @@
-# 🧠 Enterprise RAG Knowledge Assistant
+# 🧠 Enterprise RAG Knowledge Assistant — manikantbindass
 
 <p align="center">
   <img src="docs/assets/banner.png" alt="Enterprise RAG Knowledge Assistant" width="800"/>
@@ -129,7 +129,7 @@ See [Architecture Docs](docs/architecture/system-architecture.md) for full Merma
 ### 1. Clone & Configure
 
 ```bash
-git clone https://github.com/your-org/enterprise-rag-knowledge-assistant.git
+git clone https://github.com/manikantbindass/Enterprise-RAG-Knowledge-Assistant.git
 cd enterprise-rag-knowledge-assistant
 cp .env.example .env
 # Edit .env with your API keys
@@ -290,5 +290,5 @@ See [CONTRIBUTING.md](CONTRIBUTING.md)
 ## Support
 
 - 📖 [Documentation](docs/)
-- 🐛 [Issue Tracker](https://github.com/your-org/enterprise-rag-knowledge-assistant/issues)
-- 💬 [Discussions](https://github.com/your-org/enterprise-rag-knowledge-assistant/discussions)
+- 🐛 [Issue Tracker](https://github.com/manikantbindass/Enterprise-RAG-Knowledge-Assistant/issues)
+  - 💬 [Discussions](https://github.com/manikantbindass/Enterprise-RAG-Knowledge-Assistant/discussions)

@@ -2,6 +2,7 @@
 
 import Link from 'next/link'
 import { usePathname } from 'next/navigation'
+import { useEffect, useState } from 'react'
 import { motion, AnimatePresence } from 'framer-motion'
 import {
   Brain, LayoutDashboard, FileText, MessageSquare,
@@ -22,9 +23,38 @@ interface SidebarProps {
   onToggle: () => void
 }
 
+interface StoredUser {
+  name: string
+  email: string
+  role: string
+}
+
 export default function Sidebar({ collapsed, onToggle }: SidebarProps) {
   const pathname = usePathname()
-  const isAdmin = true // TODO: from auth store
+  const [user, setUser] = useState<StoredUser | null>(null)
+  const isAdmin = user?.role === 'admin'
+
+  useEffect(() => {
+    try {
+      const raw = localStorage.getItem('rag_user')
+      if (raw) setUser(JSON.parse(raw))
+    } catch {
+      setUser(null)
+    }
+  }, [])
+
+  const handleLogout = () => {
+    localStorage.removeItem('rag_user')
+    localStorage.removeItem('accessToken')
+    localStorage.removeItem('refreshToken')
+    // Clear session cookie
+    document.cookie = 'rag_session=; path=/; max-age=0; SameSite=Lax'
+    window.location.href = '/'
+  }
+
+  const initials = user?.name
+    ? user.name.split(' ').map(p => p[0]).slice(0, 2).join('').toUpperCase()
+    : 'U'
 
   return (
     <motion.aside
@@ -62,7 +92,10 @@ export default function Sidebar({ collapsed, onToggle }: SidebarProps) {
       {/* Nav */}
       <nav className="flex-1 py-4 px-2 space-y-1 overflow-y-auto">
         {nav.filter(item => !item.adminOnly || isAdmin).map((item) => {
-          const active = pathname.startsWith(item.href)
+          // Exact match for /dashboard, prefix match for all others
+          const active = item.href === '/dashboard'
+            ? pathname === '/dashboard'
+            : pathname.startsWith(item.href)
           return (
             <Link
               key={item.href}
@@ -108,13 +141,13 @@ export default function Sidebar({ collapsed, onToggle }: SidebarProps) {
       <div className="p-3 border-t border-slate-800">
         <div className={cn('flex items-center gap-3 p-2 rounded-xl hover:bg-slate-800 transition-all cursor-pointer', collapsed && 'justify-center')}>
           <div className="w-8 h-8 rounded-full bg-gradient-to-br from-indigo-500 to-violet-500 flex items-center justify-center text-white text-xs font-bold flex-shrink-0">
-            A
+            {initials}
           </div>
           <AnimatePresence>
             {!collapsed && (
               <motion.div initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }} className="flex-1 min-w-0">
-                <div className="text-white text-sm font-medium truncate">Admin User</div>
-                <div className="text-xs text-indigo-400 font-medium">Admin</div>
+                <div className="text-white text-sm font-medium truncate">{user?.name || 'User'}</div>
+                <div className="text-xs text-indigo-400 font-medium capitalize">{user?.role || 'user'}</div>
               </motion.div>
             )}
           </AnimatePresence>
@@ -124,7 +157,7 @@ export default function Sidebar({ collapsed, onToggle }: SidebarProps) {
                 initial={{ opacity: 0 }}
                 animate={{ opacity: 1 }}
                 exit={{ opacity: 0 }}
-                onClick={() => fetch('/api/v1/auth/logout', { method: 'POST' }).then(() => window.location.href = '/')}
+                onClick={handleLogout}
                 className="p-1 text-slate-500 hover:text-red-400 transition-colors"
                 title="Logout"
               >

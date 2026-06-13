@@ -1,11 +1,37 @@
 'use client'
 
-import { useState } from 'react'
+import { useState, Suspense } from 'react'
+import { useSearchParams } from 'next/navigation'
 import { motion } from 'framer-motion'
 import { Brain, Shield, Zap, Search, FileText, Users, ArrowRight, Eye, EyeOff } from 'lucide-react'
 import Link from 'next/link'
 
-export default function LoginPage() {
+// Stable bubble data — pre-seeded to avoid SSR hydration mismatch
+const BUBBLES = [
+  { w: 180, h: 130, l: 12, t: 8, dx: 20, dy: -15, dur: 9 },
+  { w: 220, h: 180, l: 65, t: 72, dx: -25, dy: 18, dur: 11 },
+  { w: 100, h: 140, l: 82, t: 30, dx: 15, dy: -20, dur: 7 },
+  { w: 160, h: 90, l: 35, t: 55, dx: -18, dy: 12, dur: 13 },
+  { w: 240, h: 200, l: 50, t: 10, dx: 22, dy: -8, dur: 8 },
+  { w: 80, h: 110, l: 5, t: 80, dx: -10, dy: 25, dur: 12 },
+  { w: 130, h: 150, l: 75, t: 60, dx: 18, dy: -22, dur: 10 },
+  { w: 190, h: 120, l: 20, t: 40, dx: -28, dy: 10, dur: 14 },
+  { w: 110, h: 170, l: 90, t: 5, dx: 12, dy: 20, dur: 6 },
+  { w: 200, h: 100, l: 40, t: 85, dx: -20, dy: -15, dur: 9 },
+  { w: 150, h: 160, l: 60, t: 45, dx: 25, dy: 8, dur: 11 },
+  { w: 70, h: 80, l: 15, t: 65, dx: -15, dy: -25, dur: 8 },
+  { w: 170, h: 130, l: 85, t: 20, dx: 20, dy: 15, dur: 13 },
+  { w: 120, h: 190, l: 30, t: 15, dx: -22, dy: -10, dur: 7 },
+  { w: 210, h: 140, l: 55, t: 75, dx: 10, dy: 22, dur: 10 },
+  { w: 90, h: 120, l: 70, t: 35, dx: -18, dy: -18, dur: 12 },
+  { w: 145, h: 100, l: 8, t: 50, dx: 28, dy: 12, dur: 9 },
+  { w: 230, h: 160, l: 45, t: 25, dx: -12, dy: -28, dur: 14 },
+  { w: 105, h: 145, l: 78, t: 90, dx: 16, dy: 20, dur: 8 },
+  { w: 175, h: 115, l: 25, t: 70, dx: -25, dy: -12, dur: 11 },
+]
+
+function LoginForm() {
+  const searchParams = useSearchParams()
   const [email, setEmail] = useState('')
   const [password, setPassword] = useState('')
   const [showPassword, setShowPassword] = useState(false)
@@ -16,22 +42,19 @@ export default function LoginPage() {
     e.preventDefault()
     setIsLoading(true)
     setError('')
-    try {
-      const res = await fetch('/api/auth/login', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ email, password }),
-      })
-      if (!res.ok) {
-        const data = await res.json()
-        throw new Error(data.detail || 'Login failed')
-      }
-      window.location.href = '/dashboard'
-    } catch (err: any) {
-      setError(err.message)
-    } finally {
+    // Mock auth for local dev — replace with real API call when backend is running
+    await new Promise(r => setTimeout(r, 800))
+    if (!email || !password) {
+      setError('Please enter your email and password.')
       setIsLoading(false)
+      return
     }
+    const displayName = email.split('@')[0].replace(/[._-]/g, ' ').replace(/\b\w/g, c => c.toUpperCase())
+    localStorage.setItem('rag_user', JSON.stringify({ email, name: displayName, role: 'admin' }))
+    // Set session cookie so middleware can protect routes
+    document.cookie = 'rag_session=1; path=/; max-age=86400; SameSite=Lax'
+    const next = searchParams.get('next') || '/dashboard'
+    window.location.href = next
   }
 
   const features = [
@@ -47,23 +70,23 @@ export default function LoginPage() {
         {/* Animated gradient background */}
         <div className="absolute inset-0 bg-gradient-to-br from-indigo-950 via-violet-950 to-slate-950" />
         <div className="absolute inset-0 opacity-30">
-          {[...Array(20)].map((_, i) => (
+          {BUBBLES.map((b, i) => (
             <motion.div
               key={i}
               className="absolute rounded-full bg-indigo-500"
               style={{
-                width: Math.random() * 200 + 50,
-                height: Math.random() * 200 + 50,
-                left: `${Math.random() * 100}%`,
-                top: `${Math.random() * 100}%`,
+                width: b.w,
+                height: b.h,
+                left: `${b.l}%`,
+                top: `${b.t}%`,
                 filter: 'blur(80px)',
                 opacity: 0.15,
               }}
               animate={{
-                x: [0, Math.random() * 60 - 30],
-                y: [0, Math.random() * 60 - 30],
+                x: [0, b.dx],
+                y: [0, b.dy],
               }}
-              transition={{ duration: Math.random() * 8 + 6, repeat: Infinity, repeatType: 'reverse', ease: 'easeInOut' }}
+              transition={{ duration: b.dur, repeat: Infinity, repeatType: 'reverse', ease: 'easeInOut' }}
             />
           ))}
         </div>
@@ -234,5 +257,13 @@ export default function LoginPage() {
         </motion.div>
       </div>
     </div>
+  )
+}
+
+export default function LoginPage() {
+  return (
+    <Suspense fallback={<div className="min-h-screen bg-background" />}>
+      <LoginForm />
+    </Suspense>
   )
 }
