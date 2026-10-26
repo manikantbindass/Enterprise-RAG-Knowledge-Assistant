@@ -1,0 +1,575 @@
+version: "3.9"
+
+# ============================================================
+# Enterprise RAG Knowledge Assistant — Docker Compose
+# Full local development stack
+# ============================================================
+
+x-logging: &default-logging
+  driver: "json-file"
+  options:
+    max-size: "10m"
+    max-file: "3"
+
+x-backend-env: &backend-env
+  ENVIRONMENT: development
+  DEBUG: "true"
+  LOG_LEVEL: INFO
+  POSTGRES_HOST: postgres
+  POSTGRES_PORT: 5432
+  POSTGRES_DB: rag_assistant
+  POSTGRES_USER: rag_user
+  POSTGRES_PASSWORD: rag_password_dev
+  DATABASE_URL: postgresql+asyncpg://rag_user:rag_password_dev@postgres:5432/rag_assistant
+  REDIS_URL: redis://:redis_password_dev@redis:6379/0
+  RABBITMQ_URL: amqp://admin:rabbitmq_password_dev@rabbitmq:5672/
+  MINIO_ENDPOINT: minio:9000
+  MINIO_ACCESS_KEY: minioadmin
+  MINIO_SECRET_KEY: minioadmin123
+  MINIO_BUCKET: rag-documents
+  MINIO_SECURE: "false"
+  KEYCLOAK_URL: http://keycloak:8080
+  KEYCLOAK_REALM: rag-enterprise
+  KEYCLOAK_CLIENT_ID: rag-backend
+  KEYCLOAK_CLIENT_SECRET: rag-backend-secret-dev
+  JWT_SECRET_KEY: dev-jwt-secret-key-change-in-production-min-32-chars
+  JWT_ALGORITHM: HS256
+  JWT_ACCESS_TOKEN_EXPIRE_MINUTES: "30"
+  VECTOR_DB_BACKEND: pgvector
+  VECTOR_DIMENSION: "1536"
+  DEFAULT_CHUNK_SIZE: "512"
+  DEFAULT_CHUNK_OVERLAP: "50"
+  DEFAULT_CHUNKING_STRATEGY: recursive
+  MAX_FILE_SIZE_MB: "100"
+  ENABLE_OCR: "true"
+  OCR_ENGINE: tesseract
+  RATE_LIMIT_PER_MINUTE: "60"
+  CORS_ORIGINS: "http://localhost:3000,http://localhost:8000"
+  PROMETHEUS_ENABLED: "true"
+  ENABLE_COST_TRACKING: "true"
+  ENABLE_PII_MASKING: "true"
+  ENABLE_PROMPT_INJECTION_DEFENSE: "true"
+
+services:
+
+  # ── Infrastructure ─────────────────────────────────────────────────────────
+
+  postgres:
+    image: pgvector/pgvector:pg16
+    container_name: rag_postgres
+    restart: unless-stopped
+    environment:
+      POSTGRES_DB: rag_assistant
+      POSTGRES_USER: rag_user
+      POSTGRES_PASSWORD: rag_password_dev
+      POSTGRES_INITDB_ARGS: "--encoding=UTF8 --locale=C"
+    ports:
+      - "5432:5432"
+    volumes:
+      - postgres_data:/var/lib/postgresql/data
+      - ./scripts/db/init.sql:/docker-entrypoint-initdb.d/01_init.sql:ro
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U rag_user -d rag_assistant"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+    logging: *default-logging
+    networks:
+      - rag_internal
+
+  redis:
+    image: redis:7.2-alpine
+    container_name: rag_redis
+    restart: unless-stopped
+    command: >
+      redis-server
+      --requirepass redis_password_dev
+      --maxmemory 512mb
+      --maxmemory-policy allkeys-lru
+      --appendonly yes
+    ports:
+      - "6379:6379"
+    volumes:
+      - redis_data:/data
+    healthcheck:
+      test: ["CMD", "redis-cli", "--no-auth-warning", "-a", "redis_password_dev", "ping"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+    logging: *default-logging
+    networks:
+      - rag_internal
+
+  rabbitmq:
+    image: rabbitmq:3.13-management-alpine
+    container_name: rag_rabbitmq
+    restart: unless-stopped
+    environment:
+      RABBITMQ_DEFAULT_USER: admin
+      RABBITMQ_DEFAULT_PASS: rabbitmq_password_dev
+      RABBITMQ_DEFAULT_VHOST: /
+    ports:
+      - "5672:5672"
+      - "15672:15672"    # Management UI
+    volumes:
+      - rabbitmq_data:/var/lib/rabbitmq
+      - ./infrastructure/rabbitmq/rabbitmq.conf:/etc/rabbitmq/rabbitmq.conf:ro
+    healthcheck:
+      test: ["CMD", "rabbitmq-diagnostics", "check_port_connectivity"]
+      interval: 30s
+      timeout: 10s
+      retries: 5
+    logging: *default-logging
+    networks:
+      - rag_internal
+
+  minio:
+    image: minio/minio:latest
+    container_name: rag_minio
+    restart: unless-stopped
+    command: server /data --console-address ":9001"
+    environment:
+      MINIO_ROOT_USER: minioadmin
+      MINIO_ROOT_PASSWORD: minioadmin123
+      MINIO_SITE_NAME: rag-enterprise
+    ports:
+      - "9000:9000"
+      - "9001:9001"    # Console UI
+    volumes:
+      - minio_data:/data
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:9000/minio/health/live"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+    logging: *default-logging
+    networks:
+      - rag_internal
+
+  keycloak:
+    image: quay.io/keycloak/keycloak:24.0
+    container_name: rag_keycloak
+    restart: unless-stopped
+    command: start-dev --import-realm
+    environment:
+      KEYCLOAK_ADMIN: admin
+      KEYCLOAK_ADMIN_PASSWORD: admin
+      KC_DB: postgres
+      KC_DB_URL: jdbc:postgresql://postgres:5432/rag_assistant
+      KC_DB_USERNAME: rag_user
+      KC_DB_PASSWORD: rag_password_dev
+      KC_DB_SCHEMA: keycloak
+      KC_HOSTNAME: localhost
+      KC_HTTP_PORT: 8080
+      KC_HEALTH_ENABLED: "true"
+    ports:
+      - "8080:8080"
+    volumes:
+      - ./infrastructure/keycloak/realm-export.json:/opt/keycloak/data/import/realm-export.json:ro
+    depends_on:
+      postgres:
+        condition: service_healthy
+    healthcheck:
+      test: ["CMD-SHELL", "exec 3<>/dev/tcp/localhost/8080; echo -e 'GET /health/ready HTTP/1.1\\r\\nHost: localhost\\r\\n\\r\\n' >&3; cat <&3 | grep -q 'UP'"]
+      interval: 30s
+      timeout: 10s
+      retries: 10
+      start_period: 60s
+    logging: *default-logging
+    networks:
+      - rag_internal
+
+  # ── Backend Services ───────────────────────────────────────────────────────
+
+  api_gateway:
+    build:
+      context: ./backend/api_gateway
+      dockerfile: Dockerfile
+    container_name: rag_api_gateway
+    restart: unless-stopped
+    environment:
+      <<: *backend-env
+      SERVICE_NAME: api_gateway
+      SERVICE_PORT: "8000"
+    ports:
+      - "8000:8000"
+    volumes:
+      - ./backend/api_gateway:/app
+      - ./backend/shared:/app/shared
+    depends_on:
+      postgres:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+      rabbitmq:
+        condition: service_healthy
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:8000/health"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+    logging: *default-logging
+    networks:
+      - rag_internal
+      - rag_external
+
+  auth_service:
+    build:
+      context: ./backend/auth_service
+      dockerfile: Dockerfile
+    container_name: rag_auth_service
+    restart: unless-stopped
+    environment:
+      <<: *backend-env
+      SERVICE_NAME: auth_service
+      SERVICE_PORT: "8001"
+    volumes:
+      - ./backend/auth_service:/app
+      - ./backend/shared:/app/shared
+    depends_on:
+      postgres:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+      keycloak:
+        condition: service_started
+    logging: *default-logging
+    networks:
+      - rag_internal
+
+  user_service:
+    build:
+      context: ./backend/user_service
+      dockerfile: Dockerfile
+    container_name: rag_user_service
+    restart: unless-stopped
+    environment:
+      <<: *backend-env
+      SERVICE_NAME: user_service
+      SERVICE_PORT: "8002"
+    volumes:
+      - ./backend/user_service:/app
+      - ./backend/shared:/app/shared
+    depends_on:
+      postgres:
+        condition: service_healthy
+    logging: *default-logging
+    networks:
+      - rag_internal
+
+  document_service:
+    build:
+      context: ./backend/document_service
+      dockerfile: Dockerfile
+    container_name: rag_document_service
+    restart: unless-stopped
+    environment:
+      <<: *backend-env
+      SERVICE_NAME: document_service
+      SERVICE_PORT: "8003"
+      STORAGE_BACKEND: minio
+    volumes:
+      - ./backend/document_service:/app
+      - ./backend/shared:/app/shared
+    depends_on:
+      postgres:
+        condition: service_healthy
+      minio:
+        condition: service_healthy
+      rabbitmq:
+        condition: service_healthy
+    logging: *default-logging
+    networks:
+      - rag_internal
+
+  processing_service:
+    build:
+      context: ./backend/processing_service
+      dockerfile: Dockerfile
+    container_name: rag_processing_service
+    restart: unless-stopped
+    environment:
+      <<: *backend-env
+      SERVICE_NAME: processing_service
+    volumes:
+      - ./backend/processing_service:/app
+      - ./backend/shared:/app/shared
+    depends_on:
+      postgres:
+        condition: service_healthy
+      rabbitmq:
+        condition: service_healthy
+    logging: *default-logging
+    networks:
+      - rag_internal
+
+  embedding_service:
+    build:
+      context: ./backend/embedding_service
+      dockerfile: Dockerfile
+    container_name: rag_embedding_service
+    restart: unless-stopped
+    environment:
+      <<: *backend-env
+      SERVICE_NAME: embedding_service
+      OPENAI_API_KEY: ${OPENAI_API_KEY:-sk-placeholder}
+      ANTHROPIC_API_KEY: ${ANTHROPIC_API_KEY:-sk-ant-placeholder}
+    volumes:
+      - ./backend/embedding_service:/app
+      - ./backend/shared:/app/shared
+    depends_on:
+      postgres:
+        condition: service_healthy
+      rabbitmq:
+        condition: service_healthy
+    logging: *default-logging
+    networks:
+      - rag_internal
+
+  vector_service:
+    build:
+      context: ./backend/vector_service
+      dockerfile: Dockerfile
+    container_name: rag_vector_service
+    restart: unless-stopped
+    environment:
+      <<: *backend-env
+      SERVICE_NAME: vector_service
+      SERVICE_PORT: "8005"
+    volumes:
+      - ./backend/vector_service:/app
+      - ./backend/shared:/app/shared
+    depends_on:
+      postgres:
+        condition: service_healthy
+    logging: *default-logging
+    networks:
+      - rag_internal
+
+  chat_service:
+    build:
+      context: ./backend/chat_service
+      dockerfile: Dockerfile
+    container_name: rag_chat_service
+    restart: unless-stopped
+    environment:
+      <<: *backend-env
+      SERVICE_NAME: chat_service
+      SERVICE_PORT: "8006"
+      OPENAI_API_KEY: ${OPENAI_API_KEY:-sk-placeholder}
+      ANTHROPIC_API_KEY: ${ANTHROPIC_API_KEY:-sk-ant-placeholder}
+      AZURE_OPENAI_API_KEY: ${AZURE_OPENAI_API_KEY:-placeholder}
+      AZURE_OPENAI_ENDPOINT: ${AZURE_OPENAI_ENDPOINT:-https://placeholder.openai.azure.com/}
+      OLLAMA_BASE_URL: ${OLLAMA_BASE_URL:-http://host.docker.internal:11434}
+      VECTOR_SERVICE_URL: http://vector_service:8005
+    volumes:
+      - ./backend/chat_service:/app
+      - ./backend/shared:/app/shared
+    depends_on:
+      postgres:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+      vector_service:
+        condition: service_started
+    logging: *default-logging
+    networks:
+      - rag_internal
+
+  audit_service:
+    build:
+      context: ./backend/audit_service
+      dockerfile: Dockerfile
+    container_name: rag_audit_service
+    restart: unless-stopped
+    environment:
+      <<: *backend-env
+      SERVICE_NAME: audit_service
+      SERVICE_PORT: "8007"
+    volumes:
+      - ./backend/audit_service:/app
+      - ./backend/shared:/app/shared
+    depends_on:
+      postgres:
+        condition: service_healthy
+      rabbitmq:
+        condition: service_healthy
+    logging: *default-logging
+    networks:
+      - rag_internal
+
+  notification_service:
+    build:
+      context: ./backend/notification_service
+      dockerfile: Dockerfile
+    container_name: rag_notification_service
+    restart: unless-stopped
+    environment:
+      <<: *backend-env
+      SERVICE_NAME: notification_service
+      SMTP_HOST: ${SMTP_HOST:-smtp.gmail.com}
+      SMTP_PORT: ${SMTP_PORT:-587}
+      SMTP_USER: ${SMTP_USER:-noreply@example.com}
+      SMTP_PASSWORD: ${SMTP_PASSWORD:-placeholder}
+    volumes:
+      - ./backend/notification_service:/app
+      - ./backend/shared:/app/shared
+    depends_on:
+      rabbitmq:
+        condition: service_healthy
+    logging: *default-logging
+    networks:
+      - rag_internal
+
+  # ── Frontend ───────────────────────────────────────────────────────────────
+
+  frontend:
+    build:
+      context: ./frontend
+      dockerfile: Dockerfile.dev
+    container_name: rag_frontend
+    restart: unless-stopped
+    environment:
+      NEXT_PUBLIC_API_URL: http://localhost:8000
+      NEXT_PUBLIC_KEYCLOAK_URL: http://localhost:8080
+      NEXT_PUBLIC_KEYCLOAK_REALM: rag-enterprise
+      NEXT_PUBLIC_KEYCLOAK_CLIENT_ID: rag-frontend
+      NEXT_PUBLIC_APP_NAME: Enterprise RAG Assistant
+    ports:
+      - "3000:3000"
+    volumes:
+      - ./frontend:/app
+      - /app/node_modules
+      - /app/.next
+    depends_on:
+      - api_gateway
+    logging: *default-logging
+    networks:
+      - rag_external
+
+  # ── Observability ──────────────────────────────────────────────────────────
+
+  prometheus:
+    image: prom/prometheus:v2.51.2
+    container_name: rag_prometheus
+    restart: unless-stopped
+    command:
+      - '--config.file=/etc/prometheus/prometheus.yml'
+      - '--storage.tsdb.path=/prometheus'
+      - '--web.console.libraries=/etc/prometheus/console_libraries'
+      - '--web.console.templates=/etc/prometheus/consoles'
+      - '--storage.tsdb.retention.time=15d'
+      - '--web.enable-lifecycle'
+    ports:
+      - "9090:9090"
+    volumes:
+      - ./monitoring/prometheus/prometheus.yml:/etc/prometheus/prometheus.yml:ro
+      - ./monitoring/prometheus/alerts.yml:/etc/prometheus/alerts.yml:ro
+      - prometheus_data:/prometheus
+    logging: *default-logging
+    networks:
+      - rag_internal
+      - rag_external
+
+  grafana:
+    image: grafana/grafana:10.4.2
+    container_name: rag_grafana
+    restart: unless-stopped
+    environment:
+      GF_SECURITY_ADMIN_USER: admin
+      GF_SECURITY_ADMIN_PASSWORD: admin
+      GF_USERS_ALLOW_SIGN_UP: "false"
+      GF_PATHS_PROVISIONING: /etc/grafana/provisioning
+    ports:
+      - "3001:3000"
+    volumes:
+      - grafana_data:/var/lib/grafana
+      - ./monitoring/grafana/provisioning:/etc/grafana/provisioning:ro
+      - ./monitoring/grafana/dashboards:/var/lib/grafana/dashboards:ro
+    depends_on:
+      - prometheus
+    logging: *default-logging
+    networks:
+      - rag_internal
+      - rag_external
+
+  elasticsearch:
+    image: elasticsearch:8.13.0
+    container_name: rag_elasticsearch
+    restart: unless-stopped
+    environment:
+      discovery.type: single-node
+      xpack.security.enabled: "false"
+      ES_JAVA_OPTS: -Xms512m -Xmx512m
+      ELASTIC_PASSWORD: elastic_password_dev
+    ports:
+      - "9200:9200"
+    volumes:
+      - elasticsearch_data:/usr/share/elasticsearch/data
+    healthcheck:
+      test: ["CMD-SHELL", "curl -f http://localhost:9200/_cluster/health || exit 1"]
+      interval: 30s
+      timeout: 10s
+      retries: 5
+    logging: *default-logging
+    networks:
+      - rag_internal
+
+  kibana:
+    image: kibana:8.13.0
+    container_name: rag_kibana
+    restart: unless-stopped
+    environment:
+      ELASTICSEARCH_HOSTS: '["http://elasticsearch:9200"]'
+      xpack.security.enabled: "false"
+    ports:
+      - "5601:5601"
+    depends_on:
+      elasticsearch:
+        condition: service_healthy
+    logging: *default-logging
+    networks:
+      - rag_internal
+      - rag_external
+
+  otel_collector:
+    image: otel/opentelemetry-collector-contrib:0.99.0
+    container_name: rag_otel_collector
+    restart: unless-stopped
+    command: ["--config=/etc/otel/config.yaml"]
+    volumes:
+      - ./monitoring/otel/config.yaml:/etc/otel/config.yaml:ro
+    ports:
+      - "4317:4317"    # OTLP gRPC
+      - "4318:4318"    # OTLP HTTP
+      - "8888:8888"    # Prometheus metrics
+    logging: *default-logging
+    networks:
+      - rag_internal
+
+# ── Volumes ─────────────────────────────────────────────────────────────────
+
+volumes:
+  postgres_data:
+    driver: local
+  redis_data:
+    driver: local
+  rabbitmq_data:
+    driver: local
+  minio_data:
+    driver: local
+  prometheus_data:
+    driver: local
+  grafana_data:
+    driver: local
+  elasticsearch_data:
+    driver: local
+
+# ── Networks ─────────────────────────────────────────────────────────────────
+
+networks:
+  rag_internal:
+    driver: bridge
+    internal: true      # No direct internet access for internal services
+  rag_external:
+    driver: bridge      # Allows external access (frontend, api gateway, grafana)

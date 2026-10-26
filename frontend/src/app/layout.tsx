@@ -1,10 +1,9 @@
 import type { Metadata } from 'next'
-import { Inter } from 'next/font/google'
 import './globals.css'
+import './workspace.css'
 import { Toaster } from 'react-hot-toast'
 import Providers from './providers'
 
-const inter = Inter({ subsets: ['latin'], variable: '--font-inter' })
 
 export const metadata: Metadata = {
   title: { default: 'Enterprise RAG Assistant', template: '%s | Enterprise RAG' },
@@ -17,7 +16,7 @@ export const metadata: Metadata = {
 export default function RootLayout({ children }: { children: React.ReactNode }) {
   return (
     <html lang="en" className="dark">
-      <body className={`${inter.variable} font-inter bg-background text-text-primary antialiased`}>
+      <body>
         <Providers>
           {children}
           <Toaster

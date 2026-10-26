@@ -1,24 +1,2 @@
-'use client'
-
-import { useState } from 'react'
-import Sidebar from '@/components/layout/Sidebar'
-import Header from '@/components/layout/Header'
-import { AppStoreProvider } from '@/lib/store'
-
-export default function DashboardLayout({ children }: { children: React.ReactNode }) {
-  const [sidebarCollapsed, setSidebarCollapsed] = useState(false)
-
-  return (
-    <AppStoreProvider>
-      <div className="flex h-screen bg-background overflow-hidden">
-        <Sidebar collapsed={sidebarCollapsed} onToggle={() => setSidebarCollapsed(v => !v)} />
-        <div className="flex-1 flex flex-col min-w-0 overflow-hidden">
-          <Header />
-          <main className="flex-1 overflow-y-auto p-6">
-            {children}
-          </main>
-        </div>
-      </div>
-    </AppStoreProvider>
-  )
-}
+import { Shell } from '@/components/workspace/Workspace'
+export default function Layout({ children }: { children: React.ReactNode }) { return <Shell>{children}</Shell> }
