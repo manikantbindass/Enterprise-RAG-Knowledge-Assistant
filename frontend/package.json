@@ -6,7 +6,7 @@
     "dev": "next dev",
     "build": "next build",
     "start": "next start",
-    "lint": "eslint src/app src/components/workspace src/lib/runtime.ts src/middleware.ts",
+    "lint": "eslint src/app src/components/workspace src/components/showcase src/lib/runtime.ts src/middleware.ts",
     "typecheck": "tsc --noEmit",
     "test": "tsx --test tests/stream.test.ts",
     "test:e2e": "playwright test"

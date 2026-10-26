@@ -79,6 +79,14 @@ npm run test:e2e
 
 Frontend lint targets the supported application; legacy clients/stores remain source references and are not imported by current pages. Original tests require additional microservice dependencies and infrastructure; they are not counted as passing. Token counts, provider costs, document-level ACLs, SCIM, federation, advanced workflows and connectors remain unimplemented in this runtime. See IMPLEMENTATION_ROADMAP.md.
 
+## Public frontend showcase and optional demo account
+
+The Vercel frontend is a public visual product tour enabled by `NEXT_PUBLIC_SHOWCASE_MODE=true`. It serves actual screenshots of fictional sample knowledge and does not make requests to the developer's localhost API. This is separate from the full local workspace. To deploy the authenticated app later, provide a reachable HTTPS API via API_INTERNAL_URL and configure that API's allowed origins and secure cookies.
+
+After starting local services, `python scripts/seed-demo.py` explicitly creates `demo@lumina.local` / `LuminaDemo!2026` in its own demo organization, loads fictional sample files and records an extractive example. These are intentionally public local-demo credentials. Seeding is never automatic, never resets an existing account, and refuses a non-loopback API. Pass `--origin http://localhost:3000` if using port 3000 instead of 3100.
+
+`frontend/scripts/capture-readme.mjs` captures the real demo UI into docs/assets/screenshots. Copies under frontend/public/showcase are the product-tour images. Animated README assets are repository-owned SVGs with reduced-motion styles.
+
 ## Implementation references
 
 Provider event formats were checked against [official OpenAI Chat Completions documentation](https://developers.openai.com/api/reference/resources/chat/subresources/completions/methods/create) and [Ollama chat documentation](https://docs.ollama.com/api/chat). Next.js 15.5.28 matches the [official October 14 security update](https://nextjs.org/blog/nextjs-security-update-october-14-2026). Local stream tests use HTTPX mock transport; they do not establish account-specific model availability or live model quality.

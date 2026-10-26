@@ -1,0 +1,18 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 1400 420" width="1400" height="420" role="img" aria-labelledby="title desc">
+  <title id="title">Lumina — Enterprise RAG Knowledge Assistant</title>
+  <desc id="desc">An animated navy and lavender banner with orbiting knowledge layers. Your knowledge. A clearer connection.</desc>
+  <defs><radialGradient id="glow"><stop stop-color="#8060b8" stop-opacity=".22"/><stop offset="1" stop-color="#8060b8" stop-opacity="0"/></radialGradient><linearGradient id="accent"><stop stop-color="#d1c0ff"/><stop offset="1" stop-color="#9274d1"/></linearGradient><linearGradient id="line"><stop stop-color="#a58bdd" stop-opacity="0"/><stop offset=".5" stop-color="#a58bdd" stop-opacity=".5"/><stop offset="1" stop-color="#a58bdd" stop-opacity="0"/></linearGradient></defs>
+  <style>.orbit{transform-origin:1100px 211px;animation:orbit 35s linear infinite}.spark{animation:pulse 4s ease-in-out infinite}.spark.second{animation-delay:2s}@keyframes orbit{to{transform:rotate(360deg)}}@keyframes pulse{50%{opacity:.3}}@media(prefers-reduced-motion:reduce){.orbit,.spark{animation:none}}</style>
+  <rect x="1" y="1" width="1398" height="418" rx="22" fill="#0b0e16" stroke="#2b263c"/>
+  <ellipse cx="1080" cy="210" rx="430" ry="270" fill="url(#glow)"/>
+  <g transform="translate(66 47)" fill="none" stroke="#b8a0f5" stroke-width="2"><path d="m0 13 16-8 16 8-16 8Z"/><path d="m0 21 16 8 16-8m-32 8 16 8 16-8"/></g>
+  <text x="114" y="74" fill="#eeedf6" font-family="Segoe UI,Arial,sans-serif" font-size="27" font-weight="600">Lumina</text><text x="225" y="72" fill="#9b93ae" font-family="Segoe UI,Arial,sans-serif" font-size="10" letter-spacing="3">KNOWLEDGE WORKSPACE</text>
+  <text x="66" y="146" fill="#a49bbd" font-family="Segoe UI,Arial,sans-serif" font-size="10" letter-spacing="3">ENTERPRISE RAG KNOWLEDGE ASSISTANT</text>
+  <text x="62" y="217" fill="#eeedf6" font-family="Segoe UI,Arial,sans-serif" font-size="57" font-weight="500" letter-spacing="-2">Your knowledge.</text>
+  <text x="62" y="285" fill="url(#accent)" font-family="Segoe UI,Arial,sans-serif" font-size="57" font-weight="500" letter-spacing="-2">A clearer connection.</text>
+  <text x="66" y="331" fill="#9296ac" font-family="Segoe UI,Arial,sans-serif" font-size="15">Documents. Questions. The evidence behind every answer.</text>
+  <circle cx="72" cy="372" r="3" fill="#81bfac"/><text x="86" y="376" fill="#8c93a8" font-family="Segoe UI,Arial,sans-serif" font-size="10" letter-spacing="1">LOCAL WORKSPACE</text><circle cx="253" cy="372" r="3" fill="#b29ce6"/><text x="267" y="376" fill="#8c93a8" font-family="Segoe UI,Arial,sans-serif" font-size="10" letter-spacing="1">PUBLIC FRONTEND SHOWCASE</text>
+  <g class="orbit" fill="none" stroke="#b9a1ed" stroke-opacity=".2"><ellipse cx="1100" cy="211" rx="188" ry="114" transform="rotate(-30 1100 211)"/><ellipse cx="1100" cy="211" rx="188" ry="114" transform="rotate(35 1100 211)"/><ellipse cx="1100" cy="211" rx="168" ry="125" transform="rotate(90 1100 211)"/><circle class="spark" cx="927" cy="266" r="5" fill="#b9a1ed" stroke="none"/><circle class="spark second" cx="1260" cy="133" r="4" fill="#99acf4" stroke="none"/></g>
+  <g fill="none" stroke="url(#accent)" stroke-width="4" stroke-linejoin="round" transform="translate(1100 211)"><path d="m-54-15 54-27 54 27-54 27Z"/><path d="m-54 4 54 27L54 4M-54 23 0 50l54-27"/></g>
+  <path d="M66 399H1334" stroke="url(#line)"/>
+</svg>

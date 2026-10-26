@@ -1,0 +1,9 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 1400 190" width="1400" height="190" role="img" aria-labelledby="title">
+  <title id="title">Lumina — Less searching. More understanding.</title>
+  <defs><linearGradient id="flow"><stop stop-color="#9078c7" stop-opacity="0"/><stop offset=".5" stop-color="#c6adff"/><stop offset="1" stop-color="#9078c7" stop-opacity="0"/></linearGradient></defs>
+  <style>.line{animation:breath 5s ease-in-out infinite}@keyframes breath{50%{opacity:.3}}@media(prefers-reduced-motion:reduce){.line{animation:none}}</style>
+  <rect x="1" y="1" width="1398" height="188" rx="18" fill="#0b0e16" stroke="#282337"/>
+  <text x="700" y="65" text-anchor="middle" font-family="Segoe UI,Arial,sans-serif" fill="#a99acb" font-size="10" letter-spacing="4">LUMINA / KNOWLEDGE WORKSPACE</text>
+  <text x="700" y="109" text-anchor="middle" font-family="Segoe UI,Arial,sans-serif" fill="#e9e6f4" font-size="29" letter-spacing="-.6">Less searching. More understanding.</text>
+  <path class="line" d="M280 145H1120" stroke="url(#flow)" stroke-width="2"/>
+</svg>

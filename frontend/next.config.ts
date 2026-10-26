@@ -1,10 +1,16 @@
 import type { NextConfig } from "next";
 
 const nextConfig: NextConfig = {
-  output: "standalone",
+  output: process.env.VERCEL ? undefined : "standalone",
+  distDir: process.env.NEXT_BUILD_DIR || ".next",
   outputFileTracingRoot: process.cwd(),
   experimental: { cpus: 2 },
   async rewrites() {
+    if (
+      process.env.NEXT_PUBLIC_SHOWCASE_MODE === "true" &&
+      !process.env.API_INTERNAL_URL
+    )
+      return [];
     return [
       {
         source: "/api/v2/:path*",

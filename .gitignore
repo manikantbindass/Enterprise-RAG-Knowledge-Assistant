@@ -50,3 +50,4 @@ helm/charts/
 *.tsbuildinfo
 frontend/test-results/
 frontend/playwright-report/
+frontend/.next-showcase/

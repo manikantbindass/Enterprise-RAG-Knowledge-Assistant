@@ -10,6 +10,36 @@ concurrency:
   group: ci-${{ github.ref }}
   cancel-in-progress: true
 jobs:
+  showcase:
+    runs-on: ubuntu-latest
+    env:
+      NEXT_PUBLIC_SHOWCASE_MODE: 'true'
+    defaults:
+      run:
+        working-directory: frontend
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+          cache: npm
+          cache-dependency-path: frontend/package-lock.json
+      - run: npm ci
+      - run: npm run build
+      - run: npx playwright install --with-deps chromium
+      - name: Start public showcase
+        run: npm run start -- --hostname 127.0.0.1 --port 3200 > /tmp/lumina-showcase.log 2>&1 &
+      - name: Wait for showcase
+        run: |
+          node -e "(async()=>{for(let i=0;i<60;i++){try{if((await fetch('http://127.0.0.1:3200')).ok)return}catch{}await new Promise(r=>setTimeout(r,1000))}process.exit(1)})()"
+      - run: npx playwright test --config=playwright.showcase.config.ts
+      - uses: actions/upload-artifact@v4
+        if: failure()
+        with:
+          name: showcase-diagnostics
+          path: |
+            frontend/test-results
+            /tmp/lumina-showcase.log
   api:
     runs-on: ubuntu-latest
     steps:

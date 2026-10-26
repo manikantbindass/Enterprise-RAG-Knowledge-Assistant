@@ -1,0 +1,5 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 1200 32" width="1200" height="32" role="img" aria-label="Animated lavender section divider">
+  <defs><linearGradient id="fade"><stop stop-color="#a48bd9" stop-opacity="0"/><stop offset=".5" stop-color="#a48bd9" stop-opacity=".35"/><stop offset="1" stop-color="#a48bd9" stop-opacity="0"/></linearGradient></defs>
+  <style>.point{animation:drift 12s ease-in-out infinite}@keyframes drift{0%,100%{transform:translateX(100px);opacity:0}10%,90%{opacity:.8}50%{transform:translateX(1100px)}}@media(prefers-reduced-motion:reduce){.point{animation:none;transform:translateX(600px)}}</style>
+  <path d="M30 16H1170" stroke="url(#fade)"/><circle class="point" cy="16" r="2.5" fill="#bba2f0"/>
+</svg>
