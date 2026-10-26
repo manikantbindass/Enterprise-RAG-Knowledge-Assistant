@@ -17,6 +17,7 @@
 
 <p align="center">
   <a href="#project-preview">Project preview</a> ·
+  <a href="https://enterprise-rag-knowledge-assistant-three.vercel.app">Live showcase ↗</a> ·
   <a href="#demo-credentials">Demo credentials</a> ·
   <a href="#inside-the-workspace">Screenshots</a> ·
   <a href="#quick-start">Quick start</a> ·
@@ -34,7 +35,9 @@ The interface pairs charcoal and navy surfaces with restrained lavender accents,
 
 > **Two ways to explore:** the public Vercel frontend presents a visual product tour with real application screenshots. The complete local app provides authenticated accounts, document ingestion, retrieval, chat and persisted records. A hosted backend is not connected to the public showcase.
 
-The Vercel URL will be added here after deployment is verified.
+### [Open the live showcase ↗](https://enterprise-rag-knowledge-assistant-three.vercel.app)
+
+**Public URL:** https://enterprise-rag-knowledge-assistant-three.vercel.app — browse all four screen previews without signing in. The production frontend is hosted on Vercel; the backend remains local.
 
 | Experience | What you can do |
 | :--- | :--- |

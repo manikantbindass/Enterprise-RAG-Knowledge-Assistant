@@ -24,6 +24,17 @@ Rebuilt the frontend as Lumina: responsive navigation and mobile conversation se
 - Local API health returned 200. Port 3000 belongs to an existing Grafana instance; this app uses port **3100** and leaves Grafana running.
 - Final standalone frontend at **http://localhost:3100** returned HTTP 200. API at **http://localhost:8000/health** returned `status: ok`. Both processes are left running; launcher logs and PIDs are under ignored `data/logs`.
 
+## Public showcase and README update
+
+- Published an opt-in local demo seed: `demo@lumina.local` / `LuminaDemo!2026`. Verified successful login, three indexed fictional sample documents, a persisted extractive conversation, and repeatable setup without resetting an account.
+- Captured actual overview, document library, chat and mobile screenshots. Validated PNG dimensions, matching public asset copies, SVG XML and README image/document links.
+- Reworked the README with an animated SVG header, animated dividers/footer, navigation, explained screenshots, demo credentials, structured setup and engineering notes.
+- Added a public frontend-only product tour with four screen tabs, mobile layout and explicit backend availability disclosure. Production build, lint and TypeScript passed; its local browser test passed.
+- Vercel production deployment `dpl_E1uAPG3xkdDaojjvdCmc81KHwyjy` reached **READY** from commit `f8631471fe85f5a3b7eea7f30fc2b93fe1ce9423`. Verified production domain: **https://enterprise-rag-knowledge-assistant-three.vercel.app**.
+- A browser test against that actual public URL passed in 32.8 seconds: no sign-in required, all four image tabs load, no page exceptions, and no horizontal mobile overflow. Added the URL to the README and verified the repository's website field matches it.
+- GitHub verification for that revision completed successfully, including the new showcase job: https://github.com/manikantbindass/Enterprise-RAG-Knowledge-Assistant/actions/runs/40281621750.
+- Optional automatic Git-project linking was not enabled after approval review warned of possible duplicate-resource creation. This does not affect the existing production deployment. Build-log access requested additional Vercel team scope; deployment readiness was confirmed through the deployment endpoint instead.
+
 ## Remaining work
 
 The full master build prompt is **not complete**. PostgreSQL/pgvector migrations, dense/hybrid retrieval, distributed jobs, S3, document ACLs/versions, OCR/scanning, SSO/MFA/verification/recovery/SCIM, Azure/Anthropic, LangGraph agents, external connectors, billing/budgets, retention and production observability/deployment remain roadmap items. This delivery is a functional verified local foundation and must not be described as a completed production enterprise system.

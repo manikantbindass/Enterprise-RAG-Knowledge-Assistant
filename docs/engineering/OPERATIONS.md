@@ -83,6 +83,8 @@ Frontend lint targets the supported application; legacy clients/stores remain so
 
 The Vercel frontend is a public visual product tour enabled by `NEXT_PUBLIC_SHOWCASE_MODE=true`. It serves actual screenshots of fictional sample knowledge and does not make requests to the developer's localhost API. This is separate from the full local workspace. To deploy the authenticated app later, provide a reachable HTTPS API via API_INTERNAL_URL and configure that API's allowed origins and secure cookies.
 
+Verified public deployment: https://enterprise-rag-knowledge-assistant-three.vercel.app. The Vercel project is `enterprise-rag-knowledge-assistant`, rooted at `frontend`. This deployment uses the committed source revision and no hosted API or database.
+
 After starting local services, `python scripts/seed-demo.py` explicitly creates `demo@lumina.local` / `LuminaDemo!2026` in its own demo organization, loads fictional sample files and records an extractive example. These are intentionally public local-demo credentials. Seeding is never automatic, never resets an existing account, and refuses a non-loopback API. Pass `--origin http://localhost:3000` if using port 3000 instead of 3100.
 
 `frontend/scripts/capture-readme.mjs` captures the real demo UI into docs/assets/screenshots. Copies under frontend/public/showcase are the product-tour images. Animated README assets are repository-owned SVGs with reduced-motion styles.
